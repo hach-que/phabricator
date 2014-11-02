@@ -635,6 +635,7 @@ phutil_register_library_map(array(
     'DoorkeeperSchemaSpec' => 'applications/doorkeeper/storage/DoorkeeperSchemaSpec.php',
     'DoorkeeperTagView' => 'applications/doorkeeper/view/DoorkeeperTagView.php',
     'DoorkeeperTagsController' => 'applications/doorkeeper/controller/DoorkeeperTagsController.php',
+    'DrydockAllocationContext' => 'applications/drydock/util/DrydockAllocationContext.php',
     'DrydockAllocatorWorker' => 'applications/drydock/worker/DrydockAllocatorWorker.php',
     'DrydockApacheWebrootInterface' => 'applications/drydock/interface/webroot/DrydockApacheWebrootInterface.php',
     'DrydockBlueprint' => 'applications/drydock/storage/DrydockBlueprint.php',
@@ -685,6 +686,7 @@ phutil_register_library_map(array(
     'DrydockManagementLeaseWorkflow' => 'applications/drydock/management/DrydockManagementLeaseWorkflow.php',
     'DrydockManagementReleaseWorkflow' => 'applications/drydock/management/DrydockManagementReleaseWorkflow.php',
     'DrydockManagementWorkflow' => 'applications/drydock/management/DrydockManagementWorkflow.php',
+    'DrydockMinMaxTestBlueprintImplementation' => 'applications/drydock/blueprint/DrydockMinMaxTestBlueprintImplementation.php',
     'DrydockPreallocatedHostBlueprintImplementation' => 'applications/drydock/blueprint/DrydockPreallocatedHostBlueprintImplementation.php',
     'DrydockQuery' => 'applications/drydock/query/DrydockQuery.php',
     'DrydockResource' => 'applications/drydock/storage/DrydockResource.php',
@@ -3587,6 +3589,7 @@ phutil_register_library_map(array(
     'DoorkeeperSchemaSpec' => 'PhabricatorConfigSchemaSpec',
     'DoorkeeperTagView' => 'AphrontView',
     'DoorkeeperTagsController' => 'PhabricatorController',
+    'DrydockAllocationContext' => 'Phobject',
     'DrydockAllocatorWorker' => 'PhabricatorWorker',
     'DrydockApacheWebrootInterface' => 'DrydockWebrootInterface',
     'DrydockBlueprint' => array(
@@ -3646,6 +3649,7 @@ phutil_register_library_map(array(
     'DrydockManagementLeaseWorkflow' => 'DrydockManagementWorkflow',
     'DrydockManagementReleaseWorkflow' => 'DrydockManagementWorkflow',
     'DrydockManagementWorkflow' => 'PhabricatorManagementWorkflow',
+    'DrydockMinMaxTestBlueprintImplementation' => 'DrydockBlueprintImplementation',
     'DrydockPreallocatedHostBlueprintImplementation' => 'DrydockBlueprintImplementation',
     'DrydockQuery' => 'PhabricatorCursorPagedPolicyAwareQuery',
     'DrydockResource' => array(

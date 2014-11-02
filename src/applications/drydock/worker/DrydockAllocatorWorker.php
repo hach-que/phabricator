@@ -76,6 +76,9 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
 
     $blueprints = $this->loadAllBlueprints();
 
+    $lock = PhabricatorGlobalLock::newLock('drydockallocation');
+    $lock->lock(10000);
+
     // TODO: Policy stuff.
     $pool = id(new DrydockResource())->loadAllWhere(
       'type = %s AND status = %s',
@@ -116,8 +119,55 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
     }
 
     if (!$resource) {
-      $blueprints = DrydockBlueprintImplementation
-        ::getAllBlueprintImplementationsForResource($type);
+      // Attempt to use pending resources if we can.
+      $pool = id(new DrydockResource())->loadAllWhere(
+        'type = %s AND status = %s',
+        $lease->getResourceType(),
+        DrydockResourceStatus::STATUS_PENDING);
+
+      $this->logToDrydock(
+        pht('Found %d Pending Resource(s)', count($pool)));
+
+      $candidates = array();
+      foreach ($pool as $key => $candidate) {
+        if (!isset($blueprints[$candidate->getBlueprintPHID()])) {
+          unset($pool[$key]);
+          continue;
+        }
+
+        $blueprint = $blueprints[$candidate->getBlueprintPHID()];
+        $implementation = $blueprint->getImplementation();
+
+        if ($implementation->filterResource($candidate, $lease)) {
+          $candidates[] = $candidate;
+        }
+      }
+
+      $this->logToDrydock(
+        pht('%d Pending Resource(s) Remain',
+        count($candidates)));
+
+      $resource = null;
+      if ($candidates) {
+        shuffle($candidates);
+        foreach ($candidates as $candidate_resource) {
+          $blueprint = $blueprints[$candidate_resource->getBlueprintPHID()]
+            ->getImplementation();
+          if ($blueprint->allocateLease($candidate_resource, $lease)) {
+            $resource = $candidate_resource;
+            break;
+          }
+        }
+      }
+    }
+
+    if ($resource) {
+      $lock->unlock();
+    } else {
+      $blueprints = id(new DrydockBlueprintQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->execute();
+      $blueprints = mpull($blueprints, 'getImplementation', 'getPHID');
 
       $this->logToDrydock(
         pht('Found %d Blueprints', count($blueprints)));
@@ -132,32 +182,69 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
       $this->logToDrydock(
         pht('%d Blueprints Enabled', count($blueprints)));
 
-      foreach ($blueprints as $key => $candidate_blueprint) {
-        if (!$candidate_blueprint->canAllocateMoreResources($pool)) {
-          unset($blueprints[$key]);
-          continue;
+      $resources_per_blueprint = id(new DrydockResourceQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withStatuses(array(
+          DrydockResourceStatus::STATUS_PENDING,
+          DrydockResourceStatus::STATUS_OPEN,
+          DrydockResourceStatus::STATUS_ALLOCATING))
+        ->execute();
+      $resources_per_blueprint = mgroup(
+        $resources_per_blueprint,
+        'getBlueprintPHID');
+
+      try {
+        foreach ($blueprints as $key => $candidate_blueprint) {
+          $rpool = idx($resources_per_blueprint, $key, array());
+          if (!$candidate_blueprint->canAllocateMoreResources($rpool)) {
+            unset($blueprints[$key]);
+            continue;
+          }
         }
-      }
-
-      $this->logToDrydock(
-        pht('%d Blueprints Can Allocate', count($blueprints)));
-
-      if (!$blueprints) {
-        $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
-        $lease->save();
 
         $this->logToDrydock(
-          "There are no resources of type '{$type}' available, and no ".
-          "blueprints which can allocate new ones.");
+          pht('%d Blueprints Can Allocate', count($blueprints)));
 
-        return;
+        if (!$blueprints) {
+          $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+          $lease->save();
+
+          $this->logToDrydock(
+            "There are no resources of type '{$type}' available, and no ".
+            "blueprints which can allocate new ones.");
+
+          $lock->unlock();
+          return;
+        }
+
+        // TODO: Rank intelligently.
+        shuffle($blueprints);
+
+        $blueprint = head($blueprints);
+
+        // Create and save the resource preemptively with STATUS_ALLOCATING
+        // before we unlock, so that other workers will correctly count the
+        // new resource "to be allocated" when determining if they can allocate
+        // more resources to a blueprint.
+        $resource = id(new DrydockResource())
+          ->setBlueprintPHID($blueprint->getInstance()->getPHID())
+          ->setType($blueprint->getType())
+          ->setName(pht('Pending Allocation'))
+          ->setStatus(DrydockResourceStatus::STATUS_ALLOCATING)
+          ->save();
+
+        $lock->unlock();
+      } catch (Exception $ex) {
+        $lock->unlock();
+        throw $ex;
       }
 
-      // TODO: Rank intelligently.
-      shuffle($blueprints);
-
-      $blueprint = head($blueprints);
-      $resource = $blueprint->allocateResource($lease);
+      try {
+        $blueprint->allocateResource($resource, $lease);
+      } catch (Exception $ex) {
+        $resource->delete();
+        throw $ex;
+      }
 
       if (!$blueprint->allocateLease($resource, $lease)) {
         // TODO: This "should" happen only if we lost a race with another lease,

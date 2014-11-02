@@ -26,14 +26,17 @@ final class DrydockWorkingCopyBlueprintImplementation
   }
 
   protected function shouldAllocateLease(
+    DrydockAllocationContext $context,
     DrydockResource $resource,
-    DrydockLease $lease,
-    array $other_leases) {
+    DrydockLease $lease) {
 
-    return !$other_leases;
+    return $context->getCurrentResourceLeaseCount() === 0;
   }
 
-  protected function executeAllocateResource(DrydockLease $lease) {
+  protected function executeAllocateResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
     $repository_id = $lease->getAttribute('repositoryID');
     if (!$repository_id) {
       throw new Exception(
@@ -74,13 +77,13 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     $this->log(pht('Complete.'));
 
-    $resource = $this->newResourceTemplate(
-      'Working Copy ('.$repository->getCallsign().')');
-    $resource->setStatus(DrydockResourceStatus::STATUS_OPEN);
-    $resource->setAttribute('lease.host', $host_lease->getID());
-    $resource->setAttribute('path', $path);
-    $resource->setAttribute('repositoryID', $repository->getID());
-    $resource->save();
+    $resource
+      ->setName('Working Copy ('.$repository->getCallsign().')')
+      ->setStatus(DrydockResourceStatus::STATUS_OPEN)
+      ->setAttribute('lease.host', $host_lease->getID())
+      ->setAttribute('path', $path)
+      ->setAttribute('repositoryID', $repository->getID())
+      ->save();
 
     return $resource;
   }
@@ -108,6 +111,21 @@ final class DrydockWorkingCopyBlueprintImplementation
     }
 
     throw new Exception("No interface of type '{$type}'.");
+  }
+
+  protected function executeReleaseLease(
+    DrydockResource $resource,
+    DrydockLease $lease) {}
+
+  protected function shouldCloseUnleasedResource(
+    DrydockAllocationContext $context,
+    DrydockResource $resource) {
+
+    return false;
+  }
+
+  protected function executeCloseResource(DrydockResource $resource) {
+    // TODO: Remove leased directory
   }
 
 }
