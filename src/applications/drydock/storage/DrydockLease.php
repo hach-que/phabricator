@@ -9,6 +9,7 @@ final class DrydockLease extends DrydockDAO
   protected $ownerPHID;
   protected $attributes = array();
   protected $status = DrydockLeaseStatus::STATUS_PENDING;
+  protected $brokenReason;
   protected $taskID;
 
   private $resource = self::ATTACHABLE;
@@ -168,11 +169,18 @@ final class DrydockLease extends DrydockDAO
             unset($unresolved[$key]);
             break;
           case DrydockLeaseStatus::STATUS_RELEASED:
-            throw new Exception('Lease has already been released!');
+            throw new Exception(
+              'Lease %d has already been released!',
+              $lease->getID());
           case DrydockLeaseStatus::STATUS_EXPIRED:
-            throw new Exception('Lease has already expired!');
+            throw new Exception(
+              'Lease %d has already expired!',
+              $lease->getID());
           case DrydockLeaseStatus::STATUS_BROKEN:
-            throw new Exception('Lease has been broken!');
+            throw new Exception(pht(
+              'Lease %d has been broken!  Reason was: %s',
+              $lease->getID(),
+              $lease->getBrokenReason()));
           case DrydockLeaseStatus::STATUS_PENDING:
           case DrydockLeaseStatus::STATUS_ACQUIRING:
             break;

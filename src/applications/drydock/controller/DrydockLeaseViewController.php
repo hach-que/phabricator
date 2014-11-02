@@ -118,6 +118,12 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
       pht('Status'),
       $status);
 
+    if ($lease->getBrokenReason() !== null) {
+      $view->addProperty(
+        pht('Reason for Broken Status'),
+        $lease->getBrokenReason());
+    }
+
     $view->addProperty(
       pht('Resource Type'),
       $lease->getResourceType());
