@@ -41,7 +41,8 @@ final class DrydockAllocationContext extends Phobject {
       '  ON lease.resourceID = resource.id '.
       'WHERE resource.blueprintPHID = %s '.
       'AND resource.status IN (%Ld) '.
-      'AND lease.status IN (%Ld) ',
+      'AND lease.status IN (%Ld) '.
+      'GROUP BY resource.id',
       $table_resource,
       $table_lease,
       $blueprint->getPHID(),
