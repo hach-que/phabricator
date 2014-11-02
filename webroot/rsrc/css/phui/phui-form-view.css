@@ -137,6 +137,10 @@
   height: 24em;
 }
 
+.aphront-form-control-textarea-monospace {
+  font-family: monospace;
+}
+
 .aphront-form-control-select .aphront-form-input {
   padding-top: 2px;
 }

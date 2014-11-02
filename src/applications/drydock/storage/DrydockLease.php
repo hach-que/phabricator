@@ -70,6 +70,10 @@ final class DrydockLease extends DrydockDAO
     return idx($this->attributes, $key, $default);
   }
 
+  public function getAttributes() {
+    return $this->attributes;
+  }
+
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(DrydockLeasePHIDType::TYPECONST);
   }

@@ -33,15 +33,26 @@ final class DrydockAmazonEC2HostBlueprintImplementation
   }
 
   public function canAllocateResourceForLease(DrydockLease $lease) {
-    return
+    $platform_match =
       $lease->getAttribute('platform') === $this->getDetail('platform');
+    $custom_match = DrydockCustomAttributes::hasRequirements(
+      $lease->getAttributes(),
+      $this->getDetail('attributes'));
+
+    return $platform_match && $custom_match;
   }
 
   protected function canAllocateLease(
     DrydockResource $resource,
     DrydockLease $lease) {
-    return
+
+    $platform_match =
       $lease->getAttribute('platform') === $resource->getAttribute('platform');
+    $custom_match = DrydockCustomAttributes::hasRequirements(
+      $lease->getAttributes(),
+      $this->getDetail('attributes'));
+
+    return $platform_match && $custom_match;
   }
 
   protected function executeAllocateResource(
@@ -643,6 +654,18 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           'be terminated.  WARNING: You should not set this higher '.
           'than the On Demand price for this instance type, or you could end '.
           'up paying more than the non-spot instance price.'),
+      ),
+      'attr-header' => array(
+        'name' => pht('Host Attributes'),
+        'type' => 'header'
+      ),
+      'attributes' => array(
+        'name' => pht('Host Attributes'),
+        'type' => 'textarea',
+        'caption' => pht(
+          'A newline separated list of host attributes.  Each attribute '.
+          'should be specified in a key=value format.'),
+        'monospace' => true,
       ),
     ) + parent::getFieldSpecifications();
   }

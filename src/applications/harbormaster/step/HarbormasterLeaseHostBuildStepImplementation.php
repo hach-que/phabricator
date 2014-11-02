@@ -17,13 +17,16 @@ final class HarbormasterLeaseHostBuildStepImplementation
 
     $settings = $this->getSettings();
 
+    $custom_attributes = DrydockCustomAttributes::parse(
+      $settings['attributes']);
+
     // Create the lease.
     $lease = id(new DrydockLease())
       ->setResourceType('host')
       ->setAttributes(
         array(
           'platform' => $settings['platform'],
-        ))
+        ) + $custom_attributes)
       ->queueForActivation();
 
     // Wait until the lease is fulfilled.
@@ -63,6 +66,14 @@ final class HarbormasterLeaseHostBuildStepImplementation
         'name' => pht('Platform'),
         'type' => 'text',
         'required' => true,
+      ),
+      'attributes' => array(
+        'name' => pht('Required Attributes'),
+        'type' => 'textarea',
+        'caption' => pht(
+          'A newline separated list of required host attributes.  Each '.
+          'attribute should be specified in a key=value format.'),
+        'monospace' => true,
       ),
     );
   }
