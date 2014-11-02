@@ -52,7 +52,16 @@ final class HarbormasterCommandBuildStepImplementation
 
     $this->platform = null;
 
-    $interface = $lease->getInterface('command');
+    $interface = null;
+
+    switch (idx($settings, 'shell', PhutilCommandString::MODE_DEFAULT)) {
+      case PhutilCommandString::MODE_DEFAULT:
+        $interface = $lease->getInterface('command');
+        break;
+      default:
+        $interface = $lease->getInterface('command-'.$settings['shell']);
+        break;
+    }
 
     $future = $interface->getExecFuture('%C', $command);
 
@@ -129,9 +138,20 @@ final class HarbormasterCommandBuildStepImplementation
         'name' => pht('Command'),
         'type' => 'text',
         'required' => true,
-        'caption' => pht(
-          'Under Windows, this is executed under PowerShell.'.
-          'Under UNIX, this is executed using the user\'s shell.'),
+      ),
+      'shell' => array(
+        'name' => pht('Shell'),
+        'type' => 'select',
+        'options' => array(
+          PhutilCommandString::MODE_DEFAULT =>
+            'Default (Shell on Linux; Powershell on Windows)',
+          PhutilCommandString::MODE_BASH => 'Bash',
+          PhutilCommandString::MODE_WINDOWSCMD =>
+            'Windows Command Prompt',
+          PhutilCommandString::MODE_POWERSHELL =>
+            'Windows Powershell',
+        ),
+        'required' => true,
       ),
       'hostartifact' => array(
         'name' => pht('Host'),

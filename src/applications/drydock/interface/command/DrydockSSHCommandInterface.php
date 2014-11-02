@@ -43,9 +43,39 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
     $argv = func_get_args();
 
     if ($this->getConfig('platform') === 'windows') {
+
+      $escape_mode = null;
+      $command_line = null;
+
+      switch ($this->getEscapingMode()) {
+        case PhutilCommandString::MODE_WINDOWSCMD:
+        case PhutilCommandString::MODE_BASH:
+          $escape_mode = PhutilCommandString::MODE_POWERSHELL;
+          $command_line = 'iex $original_command';
+          break;
+        case PhutilCommandString::MODE_POWERSHELL:
+          $escape_mode = PhutilCommandString::MODE_POWERSHELL;
+          $command_line = <<<EOF
+
+# Encode the command as base64...
+\$bytes_command = [System.Text.Encoding]::Unicode.GetBytes(\$original_command)
+\$encoded_command = [Convert]::ToBase64String(\$bytes_command)
+
+C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe `
+  -NonInteractive `
+  -OutputFormat Text `
+  -EncodedCommand \$encoded_command
+EOF;
+          break;
+        default:
+          throw new Exception(pht(
+            'Unknown shell %s',
+            $this->getShell()));
+      }
+
       // Handle Windows by executing the command under PowerShell.
       $command = id(new PhutilCommandString($argv))
-        ->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+        ->setEscapingMode($escape_mode);
 
       $encapsulate_command = array('%s', (string)$command);
       $double_command = id(new PhutilCommandString($encapsulate_command))
@@ -87,17 +117,11 @@ foreach (\$entry in \$real_env) {
 
 $change_directory
 
-# Encode the command as base64...
 \$original_command = $double_command
-\$bytes_command = [System.Text.Encoding]::Unicode.GetBytes(\$original_command)
-\$encoded_command = [Convert]::ToBase64String(\$bytes_command)
 
 # Run powershell from itself to get a "standard" exit code.  This still
 # doesn't actually catch every kind of error :(
-C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe `
-  -NonInteractive `
-  -OutputFormat Text `
-  -EncodedCommand \$encoded_command
+$command_line
 exit \$LastExitCode
 EOF;
 

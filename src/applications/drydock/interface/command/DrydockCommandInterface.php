@@ -3,6 +3,11 @@
 abstract class DrydockCommandInterface extends DrydockInterface {
 
   private $workingDirectory;
+  private $escapingMode;
+
+  public function __construct() {
+    $this->escapingMode = PhutilCommandString::MODE_DEFAULT;
+  }
 
   public function setWorkingDirectory($working_directory) {
     $this->workingDirectory = $working_directory;
@@ -11,6 +16,15 @@ abstract class DrydockCommandInterface extends DrydockInterface {
 
   public function getWorkingDirectory() {
     return $this->workingDirectory;
+  }
+
+  public function setEscapingMode($escaping_mode) {
+    $this->escapingMode = $escaping_mode;
+    return $this;
+  }
+
+  public function getEscapingMode() {
+    return $this->escapingMode;
   }
 
   final public function getInterfaceType() {

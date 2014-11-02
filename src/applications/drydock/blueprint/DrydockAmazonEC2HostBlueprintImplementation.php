@@ -689,7 +689,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     $resource->setAttribute(
       'aws-status',
-      'Waiting for successful %s connection', $protocol_name);
+      pht('Waiting for successful %s connection', $protocol_name));
     $resource->save();
 
     while (true) {
@@ -702,7 +702,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         $ssh_future = $ssh->getExecFuture('echo "test"');
         $ssh_future->resolvex();
         if ($ssh_future->getWasKilledByTimeout()) {
-          throw new Exception('%s execution timed out.', $protocol_name);
+          throw new Exception(pht('%s execution timed out.', $protocol_name));
         }
 
         break;
@@ -986,8 +986,29 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     switch ($type) {
       case 'command':
+      case 'command-'.PhutilCommandString::MODE_POWERSHELL:
+      case 'command-'.PhutilCommandString::MODE_WINDOWSCMD:
+      case 'command-'.PhutilCommandString::MODE_BASH:
+        $interface = new DrydockSSHCommandInterface();
+        if ($resource->getAttribute('protocol') === 'winrm') {
+          $interface = new DrydockWinRMCommandInterface();
+        }
+
+        switch ($type) {
+          case 'command':
+          case 'command-'.PhutilCommandString::MODE_POWERSHELL:
+            $interface->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+            break;
+          case 'command-'.PhutilCommandString::MODE_WINDOWSCMD:
+            $interface->setEscapingMode(PhutilCommandString::MODE_WINDOWSCMD);
+            break;
+          case 'command-'.PhutilCommandString::MODE_BASH:
+            $interface->setEscapingMode(PhutilCommandString::MODE_BASH);
+            break;
+        }
+
         if ($resource->getAttribute('protocol') === 'ssh') {
-          return id(new DrydockSSHCommandInterface())
+          return $interface
             ->setConfiguration(array(
               'host' => $resource->getAttribute('host'),
               'port' => $resource->getAttribute('port'),
@@ -995,7 +1016,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
               'platform' => $resource->getAttribute('platform')))
             ->setWorkingDirectory($lease->getAttribute('path'));
         } else if ($resource->getAttribute('protocol') === 'winrm') {
-          return id(new DrydockWinRMCommandInterface())
+          return $interface
             ->setConfiguration(array(
               'host' => $resource->getAttribute('host'),
               'port' => $resource->getAttribute('port'),

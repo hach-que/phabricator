@@ -41,22 +41,40 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
       $change_directory .= 'cd '.$this->getWorkingDirectory().' & ';
     }
 
-    // Encode the command to run under Powershell.
-    $command = id(new PhutilCommandString($argv))
-      ->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+    switch ($this->getEscapingMode()) {
+      case PhutilCommandString::MODE_WINDOWSCMD:
+        $command = id(new PhutilCommandString($argv))
+          ->setEscapingMode(PhutilCommandString::MODE_WINDOWSCMD);
+        break;
+      case PhutilCommandString::MODE_BASH:
+        $command = id(new PhutilCommandString($argv))
+          ->setEscapingMode(PhutilCommandString::MODE_BASH);
+        break;
+      case PhutilCommandString::MODE_DEFAULT:
+      case PhutilCommandString::MODE_POWERSHELL:
+        // Encode the command to run under Powershell.
+        $command = id(new PhutilCommandString($argv))
+          ->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
 
-    // When Microsoft says "Unicode" they don't mean UTF-8.
-    $command = mb_convert_encoding($command, 'UTF-16LE');
-    $command = base64_encode($command);
+        // When Microsoft says "Unicode" they don't mean UTF-8.
+        $command = mb_convert_encoding($command, 'UTF-16LE');
+        $command = base64_encode($command);
 
-    $powershell =
-      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-    $powershell .=
-      ' -ExecutionPolicy Bypass'.
-      ' -NonInteractive'.
-      ' -InputFormat Text'.
-      ' -OutputFormat Text'.
-      ' -EncodedCommand '.$command;
+        $powershell =
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        $powershell .=
+          ' -ExecutionPolicy Bypass'.
+          ' -NonInteractive'.
+          ' -InputFormat Text'.
+          ' -OutputFormat Text'.
+          ' -EncodedCommand '.$command;
+        $command = $powershell;
+        break;
+      default:
+        throw new Exception(pht(
+          'Unknown shell %s',
+          $this->getShell()));
+    }
 
     $future = new ExecFuture(
       'winrm '.
@@ -69,7 +87,7 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
       $this->passphraseWinRMPassword->getUsernameEnvelope(),
       $this->passphraseWinRMPassword->getPasswordEnvelope(),
       $this->getConfig('port'),
-      $change_directory.$powershell);
+      $change_directory.$command);
     $future->setTimeout($this->execTimeout);
     return $future;
   }
