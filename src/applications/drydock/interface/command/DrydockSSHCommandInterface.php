@@ -41,17 +41,49 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       $command = id(new PhutilCommandString($argv))
         ->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
 
+      $encapsulate_command = array('%s', (string)$command);
+      $double_command = id(new PhutilCommandString($encapsulate_command))
+        ->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+
       $change_directory = '';
       if ($this->getWorkingDirectory() !== null) {
         $change_directory .= 'cd '.$this->getWorkingDirectory();
       }
 
       $script = <<<EOF
-$change_directory
-$command
-if (\$LastExitCode -ne 0) {
-  exit \$LastExitCode
+\$ErrorActionPreference = 'Continue'
+\$host.UI.RawUI.BufferSize = `
+  New-Object System.Management.Automation.Host.Size(512,50)
+
+\$s = New-PSSession localhost
+\$real_env = Invoke-Command -Session \$s -ErrorAction Continue -ScriptBlock {
+  dir Env:\\
 }
+Remove-PSSession \$s
+foreach (\$entry in (dir Env:\\)) {
+  \$keyname = ("env:" + \$entry.Name)
+  Remove-Item -Path \$keyname
+}
+foreach (\$entry in \$real_env) {
+  \$keyname = ("env:" + \$entry.Name)
+  \$keyval = \$entry.Value
+  Set-Item -Path \$keyname -Value \$keyval
+}
+
+$change_directory
+
+# Encode the command as base64...
+\$original_command = $double_command
+\$bytes_command = [System.Text.Encoding]::Unicode.GetBytes(\$original_command)
+\$encoded_command = [Convert]::ToBase64String(\$bytes_command)
+
+# Run powershell from itself to get a "standard" exit code.  This still
+# doesn't actually catch every kind of error :(
+C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe `
+  -NonInteractive `
+  -OutputFormat Text `
+  -EncodedCommand \$encoded_command
+exit \$LastExitCode
 EOF;
 
       // When Microsoft says "Unicode" they don't mean UTF-8.
