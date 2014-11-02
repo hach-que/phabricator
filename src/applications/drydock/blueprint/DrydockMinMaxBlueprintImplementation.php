@@ -5,7 +5,7 @@ abstract class DrydockMinMaxBlueprintImplementation
 
   public function canAllocateMoreResources(array $pool) {
     $max_count = $this->getDetail('max-count');
-    return count($pool) < $max_count;
+    return $max_count === null || count($pool) < $max_count;
   }
 
   protected function shouldAllocateLease(
@@ -24,7 +24,9 @@ abstract class DrydockMinMaxBlueprintImplementation
     // we allow.
     $open_count = $context->getBlueprintOpenResourceCount();
     if ($open_count < $this->getDetail('max-count')) {
-      return false;
+      if ($this->getDetail('max-count') !== null) {
+        return false;
+      }
     }
 
     // Find the resource that has the least leases.

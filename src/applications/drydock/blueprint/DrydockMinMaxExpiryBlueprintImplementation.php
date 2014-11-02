@@ -6,7 +6,15 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
   public function canAllocateMoreResources(array $pool) {
     $max_count = $this->getDetail('max-count');
 
+    if ($max_count === null) {
+      return true;
+    }
+
     $expiry = $this->getDetail('expiry');
+
+    if ($expiry === null) {
+      return count($pool) < $max_count;
+    }
 
     // Only count resources that haven't yet expired, so we can overallocate
     // if another expired resource is about to be closed (but is still waiting
