@@ -244,6 +244,31 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
           ->setStatus(DrydockResourceStatus::STATUS_ALLOCATING)
           ->save();
 
+        // Pre-emptively allocate the lease on the resource inside the lock,
+        // to ensure that other allocators don't cause this worker to lose
+        // an allocation race.  If we fail to allocate a lease here, then the
+        // blueprint is allocating resources it can't lease against.
+        //
+        // NOTE; shouldAllocateLease is specified to only check resource
+        // constraints, which means that it shouldn't be checking compatibility
+        // of details on resources or leases.  If there are any
+        // shouldAllocateLease that use details on the resources or leases to
+        // complete their work, then we might have to change this to:
+        //
+        //   $lease->setStatus(DrydockLeaseStatus::STATUS_ACQUIRING);
+        //   $lease->setResourceID($resource->getID());
+        //   $lease->attachResource($resource);
+        //   $lease->save();
+        //
+        // and bypass the resource quota logic entirely (and just assume that
+        // a resource allocated by a blueprint can have the lease allocated
+        // against it).
+        //
+        if (!$blueprint->allocateLease($resource, $lease)) {
+          throw new Exception(
+            'Blueprint allocated a resource, but can\'t lease against it.');
+        }
+
         $lock->unlock();
       } catch (Exception $ex) {
         $lock->unlock();
@@ -257,23 +282,25 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
         throw $ex;
       }
 
-      if (!$blueprint->allocateLease($resource, $lease)) {
-        // TODO: This "should" happen only if we lost a race with another lease,
-        // which happened to acquire this resource immediately after we
-        // allocated it. In this case, the right behavior is to retry
-        // immediately. However, other things like a blueprint allocating a
-        // resource it can't actually allocate the lease on might be happening
-        // too, in which case we'd just allocate infinite resources. Probably
-        // what we should do is test for an active or allocated lease and retry
-        // if we find one (although it might have already been released by now)
-        // and fail really hard ("your configuration is a huge broken mess")
-        // otherwise. But just throw for now since this stuff is all edge-casey.
-        // Alternatively we could bring resources up in a "BESPOKE" status
-        // and then switch them to "OPEN" only after the allocating lease gets
-        // its grubby mitts on the resource. This might make more sense but
-        // is a bit messy.
-        throw new Exception('Lost an allocation race?');
-      }
+      // We do not need to call allocateLease here, because we have already
+      // performed this check inside the lock.  If the logic at the end of the
+      // lock changes to bypass allocateLease, then we probably need to do some
+      // logic like (where STATUS_RESERVED does not count towards allocation
+      // limits):
+      //
+      //   $lock->lock(10000);
+      //   $lease->setStatus(DrydockLeaseStatus::STATUS_RESERVED);
+      //   $lease->save();
+      //   try {
+      //     if (!$blueprint->allocateLease($resource, $lease)) {
+      //       throw new Exception('Lost an allocation race?');
+      //     }
+      //   } catch (Exception $ex) {
+      //     $lock->unlock();
+      //     throw $ex;
+      //   }
+      //   $lock->unlock();
+      //
     }
 
     $blueprint = $resource->getBlueprint();
