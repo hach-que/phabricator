@@ -893,8 +893,16 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       'Releasing lease %d',
       $lease->getID()));
 
-    $cmd = $lease->getInterface('command');
     $path = $lease->getAttribute('path');
+
+    // Set the path back to null for the lease.  This ensures on Windows
+    // machines we don't change to the directory we're about to delete, because
+    // Windows implicitly locks a directory from deletion whenever there is a
+    // process with it's current working directory within that directory or
+    // any of it's sub-directories.
+    $lease->setAttribute('path', null);
+
+    $cmd = $lease->getInterface('command');
 
     try {
       $this->log(pht(
@@ -915,7 +923,12 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         'occur when files are locked by the operating system.  The exception '.
         'message was \'%s\'.',
         $ex->getMessage()));
+      return;
     }
+
+    $this->log(pht(
+      'Removed contents of \'%s\' on host successfully',
+      $path));
   }
 
   public function getType() {
