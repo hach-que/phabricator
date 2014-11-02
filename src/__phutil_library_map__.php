@@ -637,6 +637,7 @@ phutil_register_library_map(array(
     'DoorkeeperTagsController' => 'applications/doorkeeper/controller/DoorkeeperTagsController.php',
     'DrydockAllocationContext' => 'applications/drydock/util/DrydockAllocationContext.php',
     'DrydockAllocatorWorker' => 'applications/drydock/worker/DrydockAllocatorWorker.php',
+    'DrydockAmazonEC2HostBlueprintImplementation' => 'applications/drydock/blueprint/DrydockAmazonEC2HostBlueprintImplementation.php',
     'DrydockApacheWebrootInterface' => 'applications/drydock/interface/webroot/DrydockApacheWebrootInterface.php',
     'DrydockBlueprint' => 'applications/drydock/storage/DrydockBlueprint.php',
     'DrydockBlueprintController' => 'applications/drydock/controller/DrydockBlueprintController.php',
@@ -2947,6 +2948,7 @@ phutil_register_library_map(array(
     'UserQueryConduitAPIMethod' => 'applications/people/conduit/UserQueryConduitAPIMethod.php',
     'UserRemoveStatusConduitAPIMethod' => 'applications/people/conduit/UserRemoveStatusConduitAPIMethod.php',
     'UserWhoAmIConduitAPIMethod' => 'applications/people/conduit/UserWhoAmIConduitAPIMethod.php',
+    'WindowsZeroConf' => 'applications/drydock/blueprint/windows/WindowsZeroConf.php',
   ),
   'function' => array(
     '_phabricator_time_format' => 'view/viewutils.php',
@@ -3593,6 +3595,7 @@ phutil_register_library_map(array(
     'DoorkeeperTagsController' => 'PhabricatorController',
     'DrydockAllocationContext' => 'Phobject',
     'DrydockAllocatorWorker' => 'PhabricatorWorker',
+    'DrydockAmazonEC2HostBlueprintImplementation' => 'DrydockMinMaxExpiryBlueprintImplementation',
     'DrydockApacheWebrootInterface' => 'DrydockWebrootInterface',
     'DrydockBlueprint' => array(
       'DrydockDAO',
@@ -6163,5 +6166,6 @@ phutil_register_library_map(array(
     'UserQueryConduitAPIMethod' => 'UserConduitAPIMethod',
     'UserRemoveStatusConduitAPIMethod' => 'UserConduitAPIMethod',
     'UserWhoAmIConduitAPIMethod' => 'UserConduitAPIMethod',
+    'WindowsZeroConf' => 'Phobject',
   ),
 ));

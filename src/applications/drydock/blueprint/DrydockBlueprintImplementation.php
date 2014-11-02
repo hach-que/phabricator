@@ -347,6 +347,10 @@ abstract class DrydockBlueprintImplementation {
     return true;
   }
 
+  public function canAllocateResourceForLease(DrydockLease $lease) {
+    return true;
+  }
+
   abstract protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease);

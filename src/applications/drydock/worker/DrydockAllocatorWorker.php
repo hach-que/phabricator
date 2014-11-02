@@ -177,6 +177,12 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
           unset($blueprints[$key]);
           continue;
         }
+
+        if ($candidate_blueprint->getType() !==
+          $lease->getResourceType()) {
+          unset($blueprints[$key]);
+          continue;
+        }
       }
 
       $this->logToDrydock(
@@ -197,6 +203,11 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
         foreach ($blueprints as $key => $candidate_blueprint) {
           $rpool = idx($resources_per_blueprint, $key, array());
           if (!$candidate_blueprint->canAllocateMoreResources($rpool)) {
+            unset($blueprints[$key]);
+            continue;
+          }
+
+          if (!$candidate_blueprint->canAllocateResourceForLease($lease)) {
             unset($blueprints[$key]);
             continue;
           }
