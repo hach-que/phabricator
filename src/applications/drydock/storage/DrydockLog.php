@@ -3,11 +3,13 @@
 final class DrydockLog extends DrydockDAO
   implements PhabricatorPolicyInterface {
 
+  protected $blueprintPHID;
   protected $resourceID;
   protected $leaseID;
   protected $epoch;
   protected $message;
 
+  private $blueprint = self::ATTACHABLE;
   private $resource = self::ATTACHABLE;
   private $lease = self::ATTACHABLE;
 
@@ -31,6 +33,15 @@ final class DrydockLog extends DrydockDAO
         ),
       ),
     ) + parent::getConfiguration();
+  }
+
+  public function attachBlueprint(DrydockBlueprint $blueprint = null) {
+    $this->blueprint = $blueprint;
+    return $this;
+  }
+
+  public function getBlueprint() {
+    return $this->assertAttached($this->blueprint);
   }
 
   public function attachResource(DrydockResource $resource = null) {
@@ -65,14 +76,20 @@ final class DrydockLog extends DrydockDAO
     if ($this->getResource()) {
       return $this->getResource()->getPolicy($capability);
     }
-    return $this->getLease()->getPolicy($capability);
+    if ($this->getLease()) {
+      return $this->getLease()->getPolicy($capability);
+    }
+    return PhabricatorPolicies::POLICY_ADMIN;
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     if ($this->getResource()) {
       return $this->getResource()->hasAutomaticCapability($capability, $viewer);
     }
-    return $this->getLease()->hasAutomaticCapability($capability, $viewer);
+    if ($this->getLease()) {
+      return $this->getLease()->hasAutomaticCapability($capability, $viewer);
+    }
+    return PhabricatorPolicies::POLICY_ADMIN;
   }
 
   public function describeAutomaticCapability($capability) {

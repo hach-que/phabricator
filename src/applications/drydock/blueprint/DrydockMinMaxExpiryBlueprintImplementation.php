@@ -13,6 +13,11 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     $expiry = $this->getDetail('expiry');
 
     if ($expiry === null) {
+      $this->log(pht(
+        'Can allocate if %d is less than %d',
+        count($pool),
+        $max_count));
+
       return count($pool) < $max_count;
     }
 
@@ -27,6 +32,11 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
         $count++;
       }
     }
+
+    $this->log(pht(
+      'Can allocate if %d is less than %d',
+      $count,
+      $max_count));
 
     return $count < $max_count;
   }
@@ -44,6 +54,10 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     // hit `shouldCloseUnleasedResource` in the future and the resource will
     // be closed.
     if ($context->getCurrentResourceLeaseCount() === 0) {
+      $this->log(pht(
+        'No leases against resource %d; bypassing expiry checks',
+        $resource->getID()));
+
       return parent::shouldAllocateLease($context, $resource, $lease);
     }
 
@@ -55,6 +69,11 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
       if ($lifetime > $expiry) {
         // Prevent allocation of leases to this resource, since it's over
         // it's lifetime allowed.
+        $this->log(pht(
+          'Expiry has exceeded on resource %d, '.
+          'will not allow this to be leased against',
+          $resource->getID()));
+
         return false;
       }
     }
@@ -72,6 +91,10 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
       $lifetime = time() - $resource->getDateCreated();
 
       if ($lifetime > $expiry) {
+        $this->log(pht(
+          'Current lifetime of resource exceeds expiry; triggering close',
+          $resource->getID()));
+
         // Force closure of resources that have expired.
         return true;
       }

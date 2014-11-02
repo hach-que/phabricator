@@ -16,6 +16,13 @@ abstract class DrydockMinMaxBlueprintImplementation
     // If the current resource can allocate a lease, allow it.
     if ($context->getCurrentResourceLeaseCount() <
           $this->getDetail('leases-per-resource')) {
+
+      $this->log(pht(
+        'Resource %d has %d leases, which is less '.
+        'than the maximum of %d leases',
+        $resource->getID(),
+        $context->getCurrentResourceLeaseCount(),
+        $this->getDetail('leases-per-resource')));
       return true;
     }
 
@@ -25,6 +32,15 @@ abstract class DrydockMinMaxBlueprintImplementation
     $open_count = $context->getBlueprintOpenResourceCount();
     if ($open_count < $this->getDetail('max-count')) {
       if ($this->getDetail('max-count') !== null) {
+
+        $this->log(pht(
+          'Resource %d has %d leases, which is equal '.
+          'to or greater than than %d.  This blueprint '.
+          'can still allocate more resources, so will not lease '.
+          'against this resource.',
+          $resource->getID(),
+          $context->getCurrentResourceLeaseCount(),
+          $this->getDetail('leases-per-resource')));
         return false;
       }
     }
@@ -39,6 +55,11 @@ abstract class DrydockMinMaxBlueprintImplementation
         $minimum_lease_resource_id = $resource_id;
       }
     }
+
+    $this->log(pht(
+      'Resource %d has the lowest number of leases, so that is the resource '.
+      'that will be leased against.',
+      $minimum_lease_resource_id));
 
     // If we are that resource, then allow it, otherwise let the other
     // less-leased resource run through this logic and allocate the lease.

@@ -344,6 +344,7 @@ abstract class DrydockBlueprintImplementation {
     if ($context->getCurrentResourceLeaseCount() === 0) {
       if ($this->shouldCloseUnleasedResource($context, $resource)) {
         DrydockBlueprintImplementation::writeLog(
+          $this->instance,
           $resource,
           null,
           pht('Closing resource because it has no more active leases'));
@@ -424,7 +425,11 @@ abstract class DrydockBlueprintImplementation {
             $lease->setStatus(DrydockLeaseStatus::STATUS_RELEASED);
             break;
         }
-        DrydockBlueprintImplementation::writeLog($resource, $lease, $message);
+        DrydockBlueprintImplementation::writeLog(
+          $this->instance,
+          $resource,
+          $lease,
+          $message);
         $lease->save();
       }
 
@@ -439,7 +444,7 @@ abstract class DrydockBlueprintImplementation {
     DrydockResource $resource,
     DrydockLease $lease) {
 
-    $scope = $this->pushActiveScope(null, $lease);
+    $scope = $this->pushActiveScope($resource, $lease);
 
     $this->log(
       pht(
@@ -475,6 +480,7 @@ abstract class DrydockBlueprintImplementation {
    */
   protected function log($message) {
     self::writeLog(
+      $this->instance,
       $this->activeResource,
       $this->activeLease,
       $message);
@@ -485,6 +491,7 @@ abstract class DrydockBlueprintImplementation {
    * @task log
    */
   public static function writeLog(
+    DrydockBlueprint $blueprint = null,
     DrydockResource $resource = null,
     DrydockLease $lease = null,
     $message) {
@@ -492,6 +499,10 @@ abstract class DrydockBlueprintImplementation {
     $log = id(new DrydockLog())
       ->setEpoch(time())
       ->setMessage($message);
+
+    if ($blueprint) {
+      $log->setBlueprintPHID($blueprint->getPHID());
+    }
 
     if ($resource) {
       $log->setResourceID($resource->getID());

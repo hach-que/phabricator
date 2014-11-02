@@ -33,6 +33,7 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
   private function logToDrydock($message) {
     DrydockBlueprintImplementation::writeLog(
       null,
+      null,
       $this->loadLease(),
       $message);
   }
@@ -276,6 +277,10 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
           ->setStatus(DrydockResourceStatus::STATUS_ALLOCATING)
           ->save();
 
+        $this->logToDrydock(
+          pht('Created resources %d in \'allocating\' status.',
+          $resource->getID()));
+
         // Pre-emptively allocate the lease on the resource inside the lock,
         // to ensure that other allocators don't cause this worker to lose
         // an allocation race.  If we fail to allocate a lease here, then the
@@ -296,6 +301,9 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
         // a resource allocated by a blueprint can have the lease allocated
         // against it).
         //
+        $this->logToDrydock(
+          pht('Pre-emptively allocating the lease against the new resource.'));
+
         if (!$blueprint->allocateLease($resource, $lease)) {
           throw new Exception(
             'Blueprint allocated a resource, but can\'t lease against it.');
@@ -308,6 +316,10 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
       }
 
       try {
+        $this->logToDrydock(pht(
+          'Allocating resource using blueprint \'%s\'.',
+          $blueprint->getInstance()->getBlueprintName()));
+
         $blueprint->allocateResource($resource, $lease);
       } catch (Exception $ex) {
         $resource->delete();
@@ -334,6 +346,12 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
       //   $lock->unlock();
       //
     }
+
+    $this->logToDrydock(pht(
+      'Acquiring lease %d on resource %d using blueprint \'%s\'.',
+      $lease->getID(),
+      $resource->getID(),
+      $blueprint->getInstance()->getBlueprintName()));
 
     $blueprint = $resource->getBlueprint();
     $blueprint->acquireLease($resource, $lease);

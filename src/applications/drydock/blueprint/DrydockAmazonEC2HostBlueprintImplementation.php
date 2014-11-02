@@ -39,6 +39,14 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       $lease->getAttributes(),
       $this->getDetail('attributes'));
 
+    if ($platform_match && $custom_match) {
+      $this->log(pht(
+        'This blueprint can allocate a resource for the specified lease.'));
+    } else {
+      $this->log(pht(
+        'This blueprint can not allocate a resource for the specified lease.'));
+    }
+
     return $platform_match && $custom_match;
   }
 
@@ -51,6 +59,14 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     $custom_match = DrydockCustomAttributes::hasRequirements(
       $lease->getAttributes(),
       $this->getDetail('attributes'));
+
+    if ($platform_match && $custom_match) {
+      $this->log(pht(
+        'This blueprint can allocate the specified lease.'));
+    } else {
+      $this->log(pht(
+        'This blueprint can not allocate the specified lease.'));
+    }
 
     return $platform_match && $custom_match;
   }
@@ -71,6 +87,10 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       ->withPHIDs(array($this->getDetail('keypair')))
       ->executeOne();
 
+    $this->log(pht(
+      'Using credential %d to allocate.',
+      $credential->getID()));
+
     try {
       $existing_keys = $this->getAWSEC2Future()
         ->setRawAWSQuery(
@@ -78,8 +98,11 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           array(
             'KeyName.0' => $this->getAWSKeyPairName()))
         ->resolve();
+
+      $this->log(pht('Credential\'s public key already exists in Amazon.'));
     } catch (PhutilAWSException $ex) {
       // The key pair does not exist, so we need to import it.
+      $this->log(pht('Credential\'s public key does not exist in Amazon.'));
 
       $type = PassphraseCredentialType::getTypeByConstant(
         $credential->getCredentialType());
@@ -102,6 +125,8 @@ final class DrydockAmazonEC2HostBlueprintImplementation
             'KeyName' => $this->getAWSKeyPairName(),
             'PublicKeyMaterial' => base64_encode($public_key)))
         ->resolve();
+
+      $this->log(pht('Imported key pair to Amazon.'));
     }
 
     $settings = array(
@@ -120,6 +145,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     if (!$this->getDetail('skip-ssh-setup-windows')) {
       if ($this->getDetail('platform') === 'windows') {
+        $this->log(pht('Enabled SSH automatic configuration for Windows.'));
         $settings['UserData'] = id(new WindowsZeroConf())
           ->getEncodedUserData($credential);
       }
@@ -128,14 +154,23 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     if ($this->getDetail('spot-enabled') &&
       $this->getDetail('spot-price') !== null) {
 
+      $this->log(pht(
+        'Spot price allocation is enabled, at a price of %f.',
+        $this->getDetail('spot-price')));
+
+      $spot_price = $this->getDetail('spot-price');
+
       $spot_settings = array(
-        'SpotPrice' => $this->getDetail('spot-price'),
+        'SpotPrice' => $spot_price,
         'InstanceCount' => 1,
         'Type' => 'one-time');
 
       foreach ($settings as $key => $value) {
         $spot_settings['LaunchSpecification.'.$key] = $value;
       }
+
+      $this->log(pht(
+        'Requesting spot instance from Amazon.'));
 
       $result = $this->getAWSEC2Future()
         ->setRawAWSQuery(
@@ -145,6 +180,9 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
       $spot_request = $result->spotInstanceRequestSet->item[0];
       $spot_request_id = (string)$spot_request->spotInstanceRequestId;
+
+      $this->log(pht(
+        'Spot instance request ID is %s', $spot_request_id));
 
       // Wait until the spot instance request is fulfilled.
       while (true) {
@@ -159,14 +197,66 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           // AWS does not provide immediate consistency, so this may throw
           // "spot request does not exist" right after requesting spot
           // instances.
+          $this->log(pht(
+            'Spot instance request could not be found (due '.
+            'to eventual consistency), trying again in 5 seconds.'));
+          sleep(5);
+
           continue;
         }
 
         $spot_request = $result->spotInstanceRequestSet->item[0];
 
         $spot_state = (string)$spot_request->state;
+        $spot_status = (string)$spot_request->status->code;
+
+        $this->log(pht(
+          'Spot instance request is currently in state \'%s\' '.
+          'with status \'%s\'.',
+          $spot_state,
+          $spot_status));
 
         if ($spot_state == 'open') {
+          // Check to see if the price is too low for the request to be
+          // fulfilled.
+          if ($spot_status == 'price-too-low') {
+            // The price is too low.
+            $message = pht(
+              'The spot instance price used to launch this instance of $%f is '.
+              'too low in order for the request to be satisified.  Change the '.
+              'blueprint configuration to a higher price.  The Amazon status '.
+              'message is \'%s\'',
+              $spot_price,
+              (string)$spot_request->status->message);
+
+            $this->log($message);
+
+            $this->log(pht(
+              'Cancelling spot instance request \'%s\'.',
+              $spot_request_id));
+
+            try {
+              $result = $this->getAWSEC2Future()
+                ->setRawAWSQuery(
+                  'CancelSpotInstanceRequests',
+                  array(
+                    'SpotInstanceRequestId.0' => $spot_request_id))
+                ->resolve();
+            } catch (PhutilAWSException $ex) {
+              $this->log(pht(
+                'Unable to cancel spot request \'%s\'; cancel it from the '.
+                'AWS console instead.  The error was \'%s\'',
+                $spot_request_id,
+                $ex->getMessage()));
+            }
+
+            $this->log(pht(
+              'Spot request \'%s\' cancelled.',
+              $spot_request_id));
+
+            throw new Exception($message);
+          }
+
           // We are waiting for the request to be fulfilled.
           sleep(5);
           continue;
@@ -176,17 +266,53 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           break;
         } else {
           // The spot request is closed, cancelled or failed.
-          throw new Exception(
+          $message = pht(
             'Requested a spot instance, but the request is in state '.
-            '"'.$spot_state.'".  This may occur when the current bid '.
-            'price exceeds your maximum bid price ('.
-            $this->getDetail('spot-price').
-            ').');
+            '\'%s\'.  It is likely caused when a spot instance request '.
+            'is cancelled from the Amazon Web Console.  It may occur '.
+            'when the current bid price exceeds your maximum bid price ($%f).',
+            $spot_state,
+            $spot_price);
+
+          $this->log($message);
+
+          $this->log(pht(
+            'Cancelling spot instance request \'%s\'.',
+            $spot_request_id));
+
+          try {
+            $result = $this->getAWSEC2Future()
+              ->setRawAWSQuery(
+                'CancelSpotInstanceRequests',
+                array(
+                  'SpotInstanceRequestId.0' => $spot_request_id))
+              ->resolve();
+          } catch (PhutilAWSException $ex) {
+            $this->log(pht(
+              'Unable to cancel spot request \'%s\'; cancel it from the '.
+              'AWS console instead.  The error was \'%s\'',
+              $spot_request_id,
+              $ex->getMessage()));
+          }
+
+          $this->log(pht(
+            'Spot request \'%s\' cancelled.',
+            $spot_request_id));
+
+          throw new Exception($message);
         }
       }
+
+      $this->log(pht(
+        'Spot instance request has been fulfilled, and the instance ID is %s.',
+        $instance_id));
+
     } else {
       $settings['MinCount'] = 1;
       $settings['MaxCount'] = 1;
+
+      $this->log(pht(
+        'Requesting on-demand instance from Amazon.'));
 
       $result = $this->getAWSEC2Future()
         ->setRawAWSQuery(
@@ -196,6 +322,10 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
       $instance = $result->instancesSet->item[0];
       $instance_id = (string)$instance->instanceId;
+
+      $this->log(pht(
+        'The instance that was started is %s.',
+        $instance_id));
     }
 
     // Allocate the resource and place it into Pending status while
@@ -211,6 +341,12 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         'credential' => $credential->getID(),
         'aws-status' => 'Instance Requested'))
       ->save();
+
+    $this->log(pht(
+      'Updated the Drydock resource with the instance information.'));
+
+    $this->log(pht(
+      'Waiting for the instance to start according to Amazon'));
 
     // Wait until the instance has started.
     while (true) {
@@ -233,9 +369,13 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           break;
         } else {
           // Instance is shutting down or is otherwise terminated.
-          throw new Exception(
-            'Allocated instance, but ended up in unexpected state \''.
-            $instance_state.'\'!');
+          $message = pht(
+            'Allocated instance, but ended up in unexpected state \'%s\'! '.
+            'Did someone terminate it from the Amazon Web Console?',
+            $instance_state);
+
+          $this->log($message);
+          throw new Exception($message);
         }
       } catch (PhutilAWSException $ex) {
         // TODO: This can happen because the instance doesn't exist yet, but
@@ -245,12 +385,18 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       }
     }
 
+    $this->log(pht(
+      'Instance has started in Amazon'));
+
     $resource->setAttribute('aws-status', 'Started in Amazon');
     $resource->save();
 
     // Calculate the IP address of the instance.
     $address = '';
     if ($this->getDetail('allocate-elastic-ip')) {
+      $this->log(pht(
+        'Allocating an Elastic IP as requested'));
+
       $resource->setAttribute('eip-status', 'Allocating Elastic IP');
       $resource->setAttribute('eip-allocated', true);
       $resource->save();
@@ -333,13 +479,19 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           'Terminated');
         $resource->save();
 
-        throw new Exception(
+        $message =
           'Unable to allocate an elastic IP for the new EC2 instance. '.
           'Check your AWS account limits and ensure your limit on '.
           'elastic IP addresses is high enough to complete the '.
-          'resource allocation');
+          'resource allocation';
+
+        $this->log($message);
+        throw new Exception($message);
       }
     } else {
+      $this->log(pht(
+        'Not allocating an elastic IP for this instance'));
+
       $resource->setAttribute('eip-allocated', false);
 
       // Use the private IP address.
@@ -361,6 +513,9 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     $resource->setAttribute('port', 22);
     $resource->save();
 
+    $this->log(pht(
+      'Waiting for a successful SSH connection'));
+
     // Wait until we get a successful SSH connection.
     $ssh = id(new DrydockSSHCommandInterface())
       ->setConfiguration(array(
@@ -378,6 +533,10 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     while (true) {
       try {
+        $this->log(pht(
+          'Attempting to connect to \'%s\' via SSH',
+          $instance_id));
+
         $ssh_future = $ssh->getExecFuture('echo "test"');
         $ssh_future->resolvex();
         if ($ssh_future->getWasKilledByTimeout()) {
@@ -400,8 +559,17 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         $instance = $reservation->instancesSet->item[0];
         $instance_state = (string)$instance->instanceState->name;
 
+        $this->log(pht(
+          'SSH connection not yet ready; instance is in state \'%s\'',
+          $instance_state));
+
         if ($instance_state === 'shutting-down' ||
           $instance_state === 'terminated') {
+
+          $this->log(pht(
+            'Instance has ended up in state \'%s\' while waiting for an '.
+            'SSH connection',
+            $instance_state));
 
           // Deallocate and release the public IP address if we allocated one.
           if ($resource->getAttribute('eip-allocated')) {
@@ -453,27 +621,37 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       'aws-status',
       'Ready for Use');
     $resource->save();
+
+    $this->log(pht(
+      'Resource is now ready for use.'));
+
     return $resource;
   }
 
   protected function executeCloseResource(DrydockResource $resource) {
 
+    $this->log(pht(
+      'Closing EC2 resource.'));
+
     // Deallocate and release the public IP address if we allocated one.
     if ($resource->getAttribute('eip-allocated')) {
       try {
-      $this->getAWSEC2Future()
-        ->setRawAWSQuery(
-          'DisassociateAddress',
-          array(
-            'AssociationId' => $resource->getAttribute('eip-association-id')))
-        ->resolve();
+        $this->log(pht(
+          'Elastic IPs are allocated, so releasing them.'));
 
-      $this->getAWSEC2Future()
-        ->setRawAWSQuery(
-          'ReleaseAddress',
-          array(
-            'AllocationId' => $resource->getAttribute('eip-allocation-id')))
-        ->resolve();
+        $this->getAWSEC2Future()
+          ->setRawAWSQuery(
+            'DisassociateAddress',
+            array(
+              'AssociationId' => $resource->getAttribute('eip-association-id')))
+          ->resolve();
+
+        $this->getAWSEC2Future()
+          ->setRawAWSQuery(
+            'ReleaseAddress',
+            array(
+              'AllocationId' => $resource->getAttribute('eip-allocation-id')))
+          ->resolve();
       } catch (PhutilAWSException $ex) {
         if (substr_count(
           $ex->getMessage(),
@@ -485,6 +663,10 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         }
       }
     }
+
+    $this->log(pht(
+      'Requesting instance \'%s\' be terminated.',
+      $resource->getAttribute('instance-id')));
 
     try {
       // Terminate the EC2 instance.
@@ -508,11 +690,27 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    $this->log(pht(
+      'Starting acquisition of lease from resource %d',
+      $resource->getID()));
+
     while ($resource->getStatus() == DrydockResourceStatus::STATUS_PENDING) {
+      $this->log(pht(
+        'Resource %d is still pending, waiting until it is in an open status',
+        $resource->getID()));
+
       // This resource is still being set up by another allocator, wait until
       // it is set to open.
       sleep(5);
       $resource->reload();
+    }
+
+    if ($resource->getStatus() != DrydockResourceStatus::STATUS_OPEN) {
+      $message = pht(
+        'Resource %d did not move into an open status',
+        $resource->getID());
+      $this->log($message);
+      throw new Exception($message);
     }
 
     $platform = $resource->getAttribute('platform');
@@ -535,6 +733,11 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     $cmd = $lease->getInterface('command');
 
+    $this->log(pht(
+      'Attempting to create directory \'%s\' on resource %d',
+      $full_path,
+      $resource->getID()));
+
     $attempts = 10;
     while ($attempts > 0) {
       $attempts--;
@@ -555,16 +758,29 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     }
 
     $lease->setAttribute('path', $full_path);
+
+    $this->log(pht(
+      'Lease %d acquired on resource %d',
+      $lease->getID(),
+      $resource->getID()));
   }
 
   protected function executeReleaseLease(
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    $this->log(pht(
+      'Releasing lease %d',
+      $lease->getID()));
+
     $cmd = $lease->getInterface('command');
     $path = $lease->getAttribute('path');
 
     try {
+      $this->log(pht(
+        'Removing contents of \'%s\' on host',
+        $path));
+
       if ($resource->getAttribute('platform') !== 'windows') {
         $cmd->execx('rm -rf %s', $path);
       } else {
@@ -574,6 +790,11 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       // We try to clean up, but sometimes files are locked or still in
       // use (this is far more common on Windows).  There's nothing we can
       // do about this, so we ignore it.
+      $this->log(pht(
+        'An exception occurred while removing files on the host.  This can '.
+        'occur when files are locked by the operating system.  The exception '.
+        'message was \'%s\'.',
+        $ex->getMessage()));
     }
   }
 

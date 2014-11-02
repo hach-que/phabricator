@@ -24,6 +24,7 @@ final class DrydockResourceCloseController extends DrydockResourceController {
     $resource_uri = $this->getApplicationURI($resource_uri);
 
     if ($resource->getStatus() != DrydockResourceStatus::STATUS_OPEN &&
+      $resource->getStatus() != DrydockResourceStatus::STATUS_ALLOCATING &&
       $resource->getStatus() != DrydockResourceStatus::STATUS_PENDING) {
       $dialog = id(new AphrontDialogView())
         ->setUser($viewer)
