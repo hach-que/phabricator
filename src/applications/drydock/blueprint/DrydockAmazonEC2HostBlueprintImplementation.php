@@ -269,7 +269,23 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         $resource->setAttribute('eip-status', 'Associated');
         $resource->save();
 
-        $address = $public_ip;
+        if ($this->getDetail('always-use-private-ip')) {
+          // Use the private IP address.
+          $result = $this->getAWSEC2Future()
+            ->setRawAWSQuery(
+              'DescribeInstances',
+              array(
+                'InstanceId.0' => $instance_id))
+            ->resolve();
+
+          $reservation = $result->reservationSet->item[0];
+          $instance = $reservation->instancesSet->item[0];
+
+          $address = (string)$instance->privateIpAddress;
+        } else {
+          // Use the public IP address.
+          $address = $public_ip;
+        }
       } catch (PhutilAWSException $ex) {
         // We can't allocate an Elastic IP (probably because we've reached
         // the maximum allowed on the account).  Terminate the EC2 instance
@@ -586,6 +602,17 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           'option to automatically allocate and assign elastic IP addresses '.
           'to instances so that Phabricator can SSH to them from the '.
           'internet (instances are still only accessible by SSH key pairs)')
+      ),
+      'always-use-private-ip' => array(
+        'name' => pht('Always Use Private IP'),
+        'type' => 'bool',
+        'caption' => pht(
+          'When instances are placed in a VPC, and are not placed behind '.
+          'a NAT, an elastic IP may be required in order to establish '.
+          'outbound internet connections.  Enable this option if elastic IP '.
+          'allocation is only enabled for this purpose, and you want to '.
+          'connect to the machine on it\'s private IP address (because of '.
+          'firewall rules).'),
       ),
       'skip-ssh-setup-windows' => array(
         'name' => pht('Skip SSH setup on Windows'),
