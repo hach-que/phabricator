@@ -3,6 +3,10 @@
 final class DrydockCustomAttributes extends Phobject {
 
   public static function parse($text) {
+    if (trim($text) === '') {
+      return array();
+    }
+
     $pairs = phutil_split_lines($text);
     $attributes = array();
 
