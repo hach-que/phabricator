@@ -19,6 +19,10 @@ final class DrydockMinMaxTestBlueprintImplementation
     return pht('Used to test min / max counts.');
   }
 
+  protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {}
+
   protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease) {

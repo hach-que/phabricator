@@ -86,7 +86,7 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
     $blueprints = $this->loadAllBlueprints();
 
     $lock = PhabricatorGlobalLock::newLock('drydockallocation');
-    $lock->lock(10000);
+    $lock->lock(1000000);
 
     // TODO: Policy stuff.
     $pool = id(new DrydockResource())->loadAllWhere(
@@ -220,6 +220,8 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
 
       try {
         foreach ($blueprints as $key => $candidate_blueprint) {
+          $scope = $candidate_blueprint->pushActiveScope(null, $lease);
+
           $rpool = idx($resources_per_blueprint, $key, array());
           if (!$candidate_blueprint->canAllocateMoreResources($rpool)) {
             $this->logToDrydock(
@@ -329,6 +331,17 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
 
         $this->logToDrydock(
           pht('Moved the resource to the pending status.'));
+
+        // We must allow some initial set up of resource attributes within the
+        // lock such that when we exit, method calls to canAllocateLease will
+        // succeed even for pending resources.
+        $this->logToDrydock(
+          pht('Started initialization of pending resource.'));
+
+        $blueprint->initializePendingResource($resource, $lease);
+
+        $this->logToDrydock(
+          pht('Finished initialization of pending resource.'));
 
         $lock->unlock();
       } catch (Exception $ex) {

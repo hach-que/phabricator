@@ -50,12 +50,14 @@ abstract class DrydockMinMaxBlueprintImplementation
         'of %d.',
         count($pool),
         $max_count));
+      return true;
     } else {
       $this->log(pht(
         'Will deny resource allocation because %d is less than the maximum '.
         'of %d.',
         count($pool),
         $max_count));
+      return false;
     }
   }
 

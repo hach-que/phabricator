@@ -366,6 +366,10 @@ abstract class DrydockBlueprintImplementation {
     return true;
   }
 
+  abstract protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease);
+
   abstract protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease);
@@ -438,6 +442,25 @@ abstract class DrydockBlueprintImplementation {
       $resource->setStatus(DrydockResourceStatus::STATUS_CLOSED);
       $resource->save();
     $resource->saveTransaction();
+  }
+
+  final public function initializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
+    $scope = $this->pushActiveScope($resource, $lease);
+
+    $this->log(pht(
+      'Blueprint \'%s\': Initializing Resource for \'%s\'',
+      $this->getBlueprintClass(),
+      $lease->getLeaseName()));
+
+    try {
+      $this->executeInitializePendingResource($resource, $lease);
+    } catch (Exception $ex) {
+      $this->logException($ex);
+      throw $ex;
+    }
   }
 
   final public function allocateResource(
@@ -572,7 +595,7 @@ abstract class DrydockBlueprintImplementation {
     }
   }
 
-  private function pushActiveScope(
+  public function pushActiveScope(
     DrydockResource $resource = null,
     DrydockLease $lease = null) {
 

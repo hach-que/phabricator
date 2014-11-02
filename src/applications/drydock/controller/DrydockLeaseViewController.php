@@ -37,7 +37,8 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
     $logs = id(new DrydockLogQuery())
       ->setViewer($viewer)
       ->withLeaseIDs(array($lease->getID()))
-      ->executeWithOffsetPager($pager);
+      ->execute();
+//      ->executeWithOffsetPager($pager);
 
     $log_table = id(new DrydockLogListView())
       ->setUser($viewer)

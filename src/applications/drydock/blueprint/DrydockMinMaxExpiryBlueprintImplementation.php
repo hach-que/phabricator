@@ -28,7 +28,7 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     $pool_copy = array();
     foreach ($pool as $resource) {
       $lifetime = $now - $resource->getDateCreated();
-      if ($lifetime > $expiry) {
+      if ($lifetime <= $expiry) {
         $pool_copy[] = $resource;
       }
     }

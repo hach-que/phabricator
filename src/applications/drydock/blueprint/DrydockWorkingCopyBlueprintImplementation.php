@@ -33,6 +33,10 @@ final class DrydockWorkingCopyBlueprintImplementation
     return $context->getCurrentResourceLeaseCount() === 0;
   }
 
+  protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {}
+
   protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease) {

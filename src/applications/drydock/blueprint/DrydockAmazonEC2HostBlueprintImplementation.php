@@ -71,6 +71,19 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     return $platform_match && $custom_match;
   }
 
+  protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
+    // We must set the platform so that other allocators will lease
+    // against it successfully.
+    $resource
+      ->setAttribute(
+        'platform',
+        $this->getDetail('platform'))
+      ->save();
+  }
+
   protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease) {

@@ -19,6 +19,10 @@ final class DrydockPreallocatedHostBlueprintImplementation
     return false;
   }
 
+  protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {}
+
   protected function executeAllocateResource(
     DrydockResource $resource,
     DrydockLease $lease) {
