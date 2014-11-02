@@ -59,6 +59,11 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    // Allow other workers to start leasing against this.
+    $resource
+      ->setStatus(DrydockResourceStatus::STATUS_PENDING)
+      ->save();
+
     // We need to retrieve this as we need to use it for both importing the
     // key and looking up the ID for the resource attributes.
     $credential = id(new PassphraseCredentialQuery())
@@ -266,13 +271,28 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         $resource->setAttribute('eip-status', 'Associating Elastic IP');
         $resource->save();
 
-        $result = $this->getAWSEC2Future()
-          ->setRawAWSQuery(
-            'AssociateAddress',
-            array(
-              'InstanceId' => $instance_id,
-              'AllocationId' => $allocation_id))
-          ->resolve();
+        while (true) {
+          try {
+            $result = $this->getAWSEC2Future()
+              ->setRawAWSQuery(
+                'AssociateAddress',
+                array(
+                  'InstanceId' => $instance_id,
+                  'AllocationId' => $allocation_id))
+              ->resolve();
+            break;
+          } catch (PhutilAWSException $exx) {
+            if (substr_count(
+              $exx->getMessage(),
+              'InvalidAllocationID.NotFound') > 0) {
+              // AWS eventual consistency.  Wait a little while.
+              sleep(5);
+              continue;
+            } else {
+              throw $exx;
+            }
+          }
+        }
 
         $association_id = (string)$result->associationId;
 
@@ -349,6 +369,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         'credential' => $resource->getAttribute('credential'),
         'platform' => $resource->getAttribute('platform')));
     $ssh->setConnectTimeout(60);
+    $ssh->setExecTimeout(60);
 
     $resource->setAttribute(
       'aws-status',
@@ -357,7 +378,12 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     while (true) {
       try {
-        $ssh->getExecFuture('echo "test"')->resolvex();
+        $ssh_future = $ssh->getExecFuture('echo "test"');
+        $ssh_future->resolvex();
+        if ($ssh_future->getWasKilledByTimeout()) {
+          throw new Exception('SSH execution timed out.');
+        }
+
         break;
       } catch (Exception $ex) {
 
@@ -434,6 +460,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     // Deallocate and release the public IP address if we allocated one.
     if ($resource->getAttribute('eip-allocated')) {
+      try {
       $this->getAWSEC2Future()
         ->setRawAWSQuery(
           'DisassociateAddress',
@@ -447,15 +474,33 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           array(
             'AllocationId' => $resource->getAttribute('eip-allocation-id')))
         ->resolve();
+      } catch (PhutilAWSException $ex) {
+        if (substr_count(
+          $ex->getMessage(),
+          'InvalidAssociationID.NotFound') > 0 ||
+          substr_count($ex->getMessage(), 'InvalidAllocationID.NotFound') > 0) {
+          // TODO: Should we log this somewhere?
+        } else {
+          throw $ex;
+        }
+      }
     }
 
-    // Terminate the EC2 instance.
-    $this->getAWSEC2Future()
-      ->setRawAWSQuery(
-        'TerminateInstances',
-        array(
-          'InstanceId.0' => $resource->getAttribute('instance-id')))
-      ->resolve();
+    try {
+      // Terminate the EC2 instance.
+      $this->getAWSEC2Future()
+        ->setRawAWSQuery(
+          'TerminateInstances',
+          array(
+            'InstanceId.0' => $resource->getAttribute('instance-id')))
+        ->resolve();
+    } catch (PhutilAWSException $exx) {
+      if (substr_count($exx->getMessage(), 'InvalidInstanceID.NotFound') > 0) {
+        return;
+      } else {
+        throw $exx;
+      }
+    }
 
   }
 
@@ -490,7 +535,24 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     $cmd = $lease->getInterface('command');
 
-    $cmd->execx('mkdir %s', $full_path);
+    $attempts = 10;
+    while ($attempts > 0) {
+      $attempts--;
+      try {
+        if ($platform === 'windows') {
+          $cmd->execx('mkdir -Force %s', $full_path);
+        } else {
+          $cmd->execx('mkdir %s', $full_path);
+        }
+        break;
+      } catch (Exception $ex) {
+        if ($attempts == 0) {
+          throw ex;
+        }
+
+        sleep(5);
+      }
+    }
 
     $lease->setAttribute('path', $full_path);
   }

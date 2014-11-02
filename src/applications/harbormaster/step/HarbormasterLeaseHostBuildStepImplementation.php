@@ -29,11 +29,6 @@ final class HarbormasterLeaseHostBuildStepImplementation
         ) + $custom_attributes)
       ->queueForActivation();
 
-    // Wait until the lease is fulfilled.
-    // TODO: This will throw an exception if the lease can't be fulfilled;
-    // we should treat that as build failure not build error.
-    $lease->waitUntilActive();
-
     // Create the associated artifact.
     $artifact = $build->createArtifact(
       $build_target,
@@ -43,6 +38,11 @@ final class HarbormasterLeaseHostBuildStepImplementation
       'drydock-lease' => $lease->getID(),
     ));
     $artifact->save();
+
+    // Wait until the lease is fulfilled.
+    // TODO: This will throw an exception if the lease can't be fulfilled;
+    // we should treat that as build failure not build error.
+    $lease->waitUntilActive();
   }
 
   public function getArtifactOutputs() {

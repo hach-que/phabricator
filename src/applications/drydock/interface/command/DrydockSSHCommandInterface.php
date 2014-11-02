@@ -4,6 +4,7 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
   private $passphraseSSHKey;
   private $connectTimeout;
+  private $execTimeout;
 
   private function openCredentialsIfNotOpen() {
     if ($this->passphraseSSHKey !== null) {
@@ -28,6 +29,11 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
   public function setConnectTimeout($timeout) {
     $this->connectTimeout = $timeout;
+    return $this;
+  }
+
+  public function setExecTimeout($timeout) {
+    $this->execTimeout = $timeout;
     return $this;
   }
 
@@ -137,6 +143,7 @@ EOF;
       $this->passphraseSSHKey->getUsernameEnvelope(),
       $this->getConfig('host'),
       $full_command);
+    $future->setTimeout($this->execTimeout);
     $future->setPowershellXML($this->getConfig('platform') === 'windows');
     return $future;
   }

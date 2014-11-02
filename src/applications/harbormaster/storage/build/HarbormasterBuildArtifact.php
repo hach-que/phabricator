@@ -79,10 +79,14 @@ final class HarbormasterBuildArtifact extends HarbormasterDAO
           ->execute();
         $lease = $leases[$data['drydock-lease']];
 
-        return id(new PHUIObjectItemView())
-          ->setObjectName(pht('Drydock Lease'))
-          ->setHeader($lease->getID())
-          ->setHref('/drydock/lease/'.$lease->getID());
+        if ($lease !== null) {
+          return id(new PHUIObjectItemView())
+            ->setObjectName(pht('Drydock Lease'))
+            ->setHeader($lease->getID())
+            ->setHref('/drydock/lease/'.$lease->getID());
+        } else {
+          return null;
+        }
       case self::TYPE_URI:
         return id(new PHUIObjectItemView())
           ->setObjectName($data['name'])
@@ -148,12 +152,25 @@ final class HarbormasterBuildArtifact extends HarbormasterDAO
   }
 
   public function releaseDrydockLease() {
-    $lease = $this->loadDrydockLease();
+    try {
+      $lease = $this->loadDrydockLease();
+    } catch (Exception $ex) {
+      // When a resource fails to allocate correctly, the resource
+      // is deleted in the database, which will cause loadDrydockLease
+      // to throw an exception.  We ignore the exception since there's
+      // nothing to clean up if we don't have a valid lease / resource.
+      return;
+    }
+
     $resource = $lease->getResource();
     $blueprint = $resource->getBlueprint();
 
     if ($lease->isActive()) {
-      $blueprint->releaseLease($resource, $lease);
+      try {
+        $blueprint->releaseLease($resource, $lease);
+      } catch (Exception $ex) {
+        // Ignore exception
+      }
     }
   }
 

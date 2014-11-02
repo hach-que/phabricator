@@ -23,7 +23,8 @@ final class DrydockResourceCloseController extends DrydockResourceController {
     $resource_uri = '/resource/'.$resource->getID().'/';
     $resource_uri = $this->getApplicationURI($resource_uri);
 
-    if ($resource->getStatus() != DrydockResourceStatus::STATUS_OPEN) {
+    if ($resource->getStatus() != DrydockResourceStatus::STATUS_OPEN &&
+      $resource->getStatus() != DrydockResourceStatus::STATUS_PENDING) {
       $dialog = id(new AphrontDialogView())
         ->setUser($viewer)
         ->setTitle(pht('Resource Not Open'))

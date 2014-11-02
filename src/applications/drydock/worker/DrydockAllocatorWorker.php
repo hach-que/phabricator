@@ -39,6 +39,12 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
 
   protected function doWork() {
     $lease = $this->loadLease();
+
+    if ($lease->getStatus() != DrydockLeaseStatus::STATUS_PENDING) {
+      // We can't handle non-pending leases.
+      return;
+    }
+
     $this->logToDrydock('Allocating Lease');
 
     try {
@@ -50,7 +56,9 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
       // and always fail after the first retry right now, so this is
       // functionally equivalent.
       $lease->reload();
-      if ($lease->getStatus() == DrydockLeaseStatus::STATUS_PENDING) {
+      if ($lease->getStatus() == DrydockLeaseStatus::STATUS_PENDING ||
+        $lease->getStatus() == DrydockLeaseStatus::STATUS_ACQUIRING) {
+
         $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
         $lease->save();
       }

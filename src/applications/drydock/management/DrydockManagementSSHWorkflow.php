@@ -39,8 +39,6 @@ final class DrydockManagementSSHWorkflow
 
     if (!$lease) {
       $console->writeErr("Lease %d does not exist!\n", $id);
-    } else if ($lease->getStatus() != DrydockLeaseStatus::STATUS_ACTIVE) {
-      $console->writeErr("Lease %d is not 'active'!\n", $id);
     } else {
       $interface = $lease->getInterface('command');
       $future = $interface->getExecFuture('%C', $args->getArg('command'));
