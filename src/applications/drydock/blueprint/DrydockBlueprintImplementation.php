@@ -171,7 +171,10 @@ abstract class DrydockBlueprintImplementation {
     }
 
     if ($allocation_exception) {
+      $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+      $lease->save();
       $this->logException($allocation_exception);
+      $this->closeResourceIfDesired($resource);
     }
 
     return $allocated;
@@ -236,7 +239,10 @@ abstract class DrydockBlueprintImplementation {
     try {
       $this->executeAcquireLease($resource, $ephemeral_lease);
     } catch (Exception $ex) {
+      $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+      $lease->save();
       $this->logException($ex);
+      $this->closeResourceIfDesired($resource);
       throw $ex;
     }
 
@@ -319,21 +325,27 @@ abstract class DrydockBlueprintImplementation {
     }
 
     if (!$caused_by_closing_resource) {
-      // Check to see if the resource has no more leases, and if so, ask the
-      // blueprint as to whether this resource should be closed.
-      $context = new DrydockAllocationContext(
-        $this->getInstance(),
-        $resource,
-        $lease);
+      $this->closeResourceIfDesired($resource);
+    }
+  }
 
-      if ($context->getCurrentResourceLeaseCount() === 0) {
-        if ($this->shouldCloseUnleasedResource($context, $resource)) {
-          DrydockBlueprintImplementation::writeLog(
-            $resource,
-            null,
-            pht('Closing resource because it has no more active leases'));
-          $this->closeResource($resource);
-        }
+  private function closeResourceIfDesired(
+    DrydockResource $resource) {
+
+    // Check to see if the resource has no more leases, and if so, ask the
+    // blueprint as to whether this resource should be closed.
+    $context = new DrydockAllocationContext(
+      $this->getInstance(),
+      $resource,
+      null);
+
+    if ($context->getCurrentResourceLeaseCount() === 0) {
+      if ($this->shouldCloseUnleasedResource($context, $resource)) {
+        DrydockBlueprintImplementation::writeLog(
+          $resource,
+          null,
+          pht('Closing resource because it has no more active leases'));
+        $this->closeResource($resource);
       }
     }
   }
