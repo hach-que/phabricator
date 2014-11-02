@@ -7,7 +7,7 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     $max_count = $this->getDetail('max-count');
 
     if ($max_count === null) {
-      return true;
+      return parent::canAllocateMoreResources($pool);
     }
 
     $expiry = $this->getDetail('expiry');
@@ -24,21 +24,16 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     // Only count resources that haven't yet expired, so we can overallocate
     // if another expired resource is about to be closed (but is still waiting
     // on it's current resources to be released).
-    $count = 0;
     $now = time();
+    $pool_copy = array();
     foreach ($pool as $resource) {
       $lifetime = $now - $resource->getDateCreated();
-      if ($lifetime <= $expiry) {
-        $count++;
+      if ($lifetime > $expiry) {
+        $pool_copy[] = $resource;
       }
     }
 
-    $this->log(pht(
-      'Can allocate if %d is less than %d',
-      $count,
-      $max_count));
-
-    return $count < $max_count;
+    return parent::canAllocateMoreResources($pool_copy);
   }
 
   protected function shouldAllocateLease(

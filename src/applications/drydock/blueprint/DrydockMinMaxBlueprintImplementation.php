@@ -5,7 +5,58 @@ abstract class DrydockMinMaxBlueprintImplementation
 
   public function canAllocateMoreResources(array $pool) {
     $max_count = $this->getDetail('max-count');
-    return $max_count === null || count($pool) < $max_count;
+
+    if ($max_count === null) {
+      $this->log(pht(
+        'There is no maximum resource limit specified for this blueprint'));
+      return true;
+    }
+
+    $count_pending = 0;
+    $count_allocating = 0;
+    $count_open = 0;
+
+    foreach ($pool as $resource) {
+      switch ($resource->getStatus()) {
+        case DrydockResourceStatus::STATUS_PENDING:
+          $count_pending++;
+          break;
+        case DrydockResourceStatus::STATUS_ALLOCATING:
+          $count_allocating++;
+          break;
+        case DrydockResourceStatus::STATUS_OPEN:
+          $count_open++;
+          break;
+        default:
+          $this->log(pht(
+            'Resource %d was in the pool of open resources, '.
+            'but has non-open status of %d',
+            $resource->getID(),
+            $resource->getStatus()));
+          break;
+      }
+    }
+
+    $this->log(pht(
+      'There are currently %d pending resources, %d allocating resources '.
+      'and %d open resources in the pool.',
+      $count_pending,
+      $count_allocating,
+      $count_open));
+
+    if (count($pool) < $max_count) {
+      $this->log(pht(
+        'Will permit resource allocation because %d is less than the maximum '.
+        'of %d.',
+        count($pool),
+        $max_count));
+    } else {
+      $this->log(pht(
+        'Will deny resource allocation because %d is less than the maximum '.
+        'of %d.',
+        count($pool),
+        $max_count));
+    }
   }
 
   protected function shouldAllocateLease(
