@@ -184,7 +184,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       $this->log(pht(
         'Spot instance request ID is %s', $spot_request_id));
 
-      // Wait until the spot instance request is fulfilled.
+      // Wait until the spot instance request exists.
       while (true) {
         try {
           $result = $this->getAWSEC2Future()
@@ -193,6 +193,7 @@ final class DrydockAmazonEC2HostBlueprintImplementation
               array(
                 'SpotInstanceRequestId.0' => $spot_request_id))
             ->resolve();
+          break;
         } catch (PhutilAWSException $ex) {
           // AWS does not provide immediate consistency, so this may throw
           // "spot request does not exist" right after requesting spot
@@ -204,6 +205,65 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
           continue;
         }
+      }
+
+      $this->log(pht(
+        'Spot instance request %s is now consistent for API access.',
+        $spot_request_id));
+
+      $this->log(pht(
+        'Tagging the spot instance request with blueprint '.
+        'name and resource ID.'));
+
+      try {
+        $result = $this->getAWSEC2Future()
+          ->setRawAWSQuery(
+            'CreateTags',
+            array(
+              'ResourceId.0' => $spot_request_id,
+              'Tag.0.Key' => 'Name',
+              'Tag.0.Value' => pht(
+                'Phabricator (blueprint \'%s\', resource %d)',
+                $this->getInstance()->getBlueprintName(),
+                $resource->getID()),
+              'Tag.1.Key' => 'BlueprintPHID',
+              'Tag.1.Value' => $this->getInstance()->getPHID(),
+              'Tag.2.Key' => 'BlueprintName',
+              'Tag.2.Value' => $this->getInstance()->getBlueprintName(),
+              'Tag.3.Key' => 'ResourceID',
+              'Tag.3.Value' => $resource->getID(),
+              'Tag.4.Key' => 'AllocatedForLeaseID',
+              'Tag.4.Value' => $lease->getID(),
+              'Tag.5.Key' => 'PhabricatorURI',
+              'Tag.5.Value' => PhabricatorEnv::getProductionURI('/'),
+              'Tag.6.Key' => 'BlueprintURI',
+              'Tag.6.Value' => PhabricatorEnv::getProductionURI(
+                '/drydock/blueprint/'.$this->getInstance()->getID().'/'),
+              'Tag.7.Key' => 'ResourceURI',
+              'Tag.7.Value' => PhabricatorEnv::getProductionURI(
+                '/drydock/resource/'.$resource->getID().'/'),
+              'Tag.8.Key' => 'AllocatedForLeaseURI',
+              'Tag.8.Value' => PhabricatorEnv::getProductionURI(
+                '/drydock/lease/'.$lease->getID().'/'),
+              ))
+          ->resolve();
+
+        $this->log(pht(
+          'Tagged spot instance request successfully.'));
+      } catch (Exception $ex) {
+        $this->log(pht(
+          'Unable to tag spot instance request.  Exception was \'%s\'.',
+          $ex->getMessage()));
+      }
+
+      // Wait until the spot instance request is fulfilled.
+      while (true) {
+        $result = $this->getAWSEC2Future()
+          ->setRawAWSQuery(
+            'DescribeSpotInstanceRequests',
+            array(
+              'SpotInstanceRequestId.0' => $spot_request_id))
+          ->resolve();
 
         $spot_request = $result->spotInstanceRequestSet->item[0];
 
@@ -326,6 +386,29 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       $this->log(pht(
         'The instance that was started is %s.',
         $instance_id));
+
+      // Wait until the instance has appeared.
+      while (true) {
+        try {
+          $result = $this->getAWSEC2Future()
+            ->setRawAWSQuery(
+              'DescribeInstances',
+              array(
+                'InstanceId.0' => $instance_id))
+            ->resolve();
+          break;
+        } catch (PhutilAWSException $ex) {
+          $this->log(pht(
+            'Instance could not be found (due '.
+            'to eventual consistency), trying again in 5 seconds.'));
+          sleep(5);
+          continue;
+        }
+      }
+
+      $this->log(pht(
+        'Instance %s is now consistent for API access.',
+        $instance_id));
     }
 
     // Allocate the resource and place it into Pending status while
@@ -346,42 +429,79 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       'Updated the Drydock resource with the instance information.'));
 
     $this->log(pht(
+      'Tagging the instance with blueprint name and resource ID.'));
+
+    try {
+      $result = $this->getAWSEC2Future()
+        ->setRawAWSQuery(
+          'CreateTags',
+          array(
+            'ResourceId.0' => $instance_id,
+            'Tag.0.Key' => 'Name',
+            'Tag.0.Value' => pht(
+              'Phabricator (blueprint \'%s\', resource %d)',
+              $this->getInstance()->getBlueprintName(),
+              $resource->getID()),
+            'Tag.1.Key' => 'BlueprintPHID',
+            'Tag.1.Value' => $this->getInstance()->getPHID(),
+            'Tag.2.Key' => 'BlueprintName',
+            'Tag.2.Value' => $this->getInstance()->getBlueprintName(),
+            'Tag.3.Key' => 'ResourceID',
+            'Tag.3.Value' => $resource->getID(),
+            'Tag.4.Key' => 'AllocatedForLeaseID',
+            'Tag.4.Value' => $lease->getID(),
+            'Tag.5.Key' => 'PhabricatorURI',
+            'Tag.5.Value' => PhabricatorEnv::getProductionURI('/'),
+            'Tag.6.Key' => 'BlueprintURI',
+            'Tag.6.Value' => PhabricatorEnv::getProductionURI(
+              '/drydock/blueprint/'.$this->getInstance()->getID().'/'),
+            'Tag.7.Key' => 'ResourceURI',
+            'Tag.7.Value' => PhabricatorEnv::getProductionURI(
+              '/drydock/resource/'.$resource->getID().'/'),
+            'Tag.8.Key' => 'AllocatedForLeaseURI',
+            'Tag.8.Value' => PhabricatorEnv::getProductionURI(
+              '/drydock/lease/'.$lease->getID().'/'),
+            ))
+        ->resolve();
+
+      $this->log(pht(
+        'Tagged instance successfully.'));
+    } catch (Exception $ex) {
+      $this->log(pht(
+        'Unable to tag instance.  Exception was \'%s\'.',
+        $ex->getMessage()));
+    }
+
+    $this->log(pht(
       'Waiting for the instance to start according to Amazon'));
 
     // Wait until the instance has started.
     while (true) {
-      try {
-        $result = $this->getAWSEC2Future()
-          ->setRawAWSQuery(
-            'DescribeInstances',
-            array(
-              'InstanceId.0' => $instance_id))
-          ->resolve();
+      $result = $this->getAWSEC2Future()
+        ->setRawAWSQuery(
+          'DescribeInstances',
+          array(
+            'InstanceId.0' => $instance_id))
+        ->resolve();
 
-        $reservation = $result->reservationSet->item[0];
-        $instance = $reservation->instancesSet->item[0];
-        $instance_state = (string)$instance->instanceState->name;
+      $reservation = $result->reservationSet->item[0];
+      $instance = $reservation->instancesSet->item[0];
+      $instance_state = (string)$instance->instanceState->name;
 
-        if ($instance_state === 'pending') {
-          sleep(5);
-          continue;
-        } else if ($instance_state === 'running') {
-          break;
-        } else {
-          // Instance is shutting down or is otherwise terminated.
-          $message = pht(
-            'Allocated instance, but ended up in unexpected state \'%s\'! '.
-            'Did someone terminate it from the Amazon Web Console?',
-            $instance_state);
-
-          $this->log($message);
-          throw new Exception($message);
-        }
-      } catch (PhutilAWSException $ex) {
-        // TODO: This can happen because the instance doesn't exist yet, but
-        // we should check specifically for that error.
+      if ($instance_state === 'pending') {
         sleep(5);
         continue;
+      } else if ($instance_state === 'running') {
+        break;
+      } else {
+        // Instance is shutting down or is otherwise terminated.
+        $message = pht(
+          'Allocated instance, but ended up in unexpected state \'%s\'! '.
+          'Did someone terminate it from the Amazon Web Console?',
+          $instance_state);
+
+        $this->log($message);
+        throw new Exception($message);
       }
     }
 
