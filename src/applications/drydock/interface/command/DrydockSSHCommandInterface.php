@@ -56,6 +56,15 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
   New-Object System.Management.Automation.Host.Size(512,50)
 
 \$s = New-PSSession localhost
+while (\$s -eq \$null) {
+  # Occasionally Windows fails to authenticate the current user as
+  # themselves.
+  Write-Error `
+    "Failure to create session in New-PSSession.  Retrying..."
+  Sleep 5
+
+  \$s = New-PSSession localhost
+}
 \$real_env = Invoke-Command -Session \$s -ErrorAction Continue -ScriptBlock {
   dir Env:\\
 }
