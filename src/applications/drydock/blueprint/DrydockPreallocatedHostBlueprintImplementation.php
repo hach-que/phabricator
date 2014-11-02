@@ -52,16 +52,33 @@ final class DrydockPreallocatedHostBlueprintImplementation
     // we have all the information we need.
     PhutilTypeSpec::checkMap(
       $resource->getAttributesForTypeSpec(
-        array('platform', 'host', 'port', 'credential', 'path')),
+        array('platform', 'protocol', 'host', 'port', 'credential', 'path')),
       array(
         'platform' => 'string',
+        'protocol' => 'string',
         'host' => 'string',
         'port' => 'string', // Value is a string from the command line
         'credential' => 'string',
         'path' => 'string',
       ));
     $v_platform = $resource->getAttribute('platform');
+    $v_protocol = $resource->getAttribute('protocol');
     $v_path = $resource->getAttribute('path');
+
+    // Verify the provided protocol.
+    if ($v_platform === 'windows') {
+      if ($v_protocol !== 'ssh' && $v_protocol !== 'winrm') {
+        throw new Exception(
+          'Invalid protocol set for Windows platform; '.
+          'expected \'ssh\' or \'winrm\'.');
+      }
+    } else {
+      if ($v_protocol !== 'ssh') {
+        throw new Exception(
+          'Invalid protocol set for UNIX platform; '.
+          'expected \'ssh\'.');
+      }
+    }
 
     // Similar to DrydockLocalHostBlueprint, we create a folder
     // on the remote host that the lease can use.
@@ -99,7 +116,12 @@ final class DrydockPreallocatedHostBlueprintImplementation
 
     switch ($type) {
       case 'command':
-        return id(new DrydockSSHCommandInterface())
+        $interface = new DrydockSSHCommandInterface();
+        if ($resource->getAttribute('protocol') === 'winrm') {
+          $interface = new DrydockWinRMCommandInterface();
+        }
+
+        return $interface
           ->setConfiguration(array(
             'host' => $resource->getAttribute('host'),
             'port' => $resource->getAttribute('port'),

@@ -95,9 +95,32 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       ->withPHIDs(array($this->getDetail('keypair')))
       ->executeOne();
 
+    if ($credential === null) {
+      throw new Exception('Specified credential does not exist!');
+    }
+
     $this->log(pht(
       'Using credential %d to allocate.',
       $credential->getID()));
+
+    $winrm_auth_id = null;
+    if ($this->getDetail('protocol') === 'winrm') {
+      $winrm_auth = id(new PassphraseCredentialQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withPHIDs(array($this->getDetail('winrm-auth')))
+        ->executeOne();
+
+      if ($winrm_auth === null) {
+        throw new Exception(
+          'Specified credential for WinRM auth does not exist!');
+      }
+
+      $winrm_auth_id = $winrm_auth->getID();
+
+      $this->log(pht(
+        'Using credential %d to authenticate over WinRM.',
+        $winrm_auth->getID()));
+    }
 
     try {
       $existing_keys = $this->getAWSEC2Future()
@@ -151,11 +174,11 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       $i++;
     }
 
-    if (!$this->getDetail('skip-ssh-setup-windows')) {
+    if (!$this->getDetail('skip-setup-windows')) {
       if ($this->getDetail('platform') === 'windows') {
         $this->log(pht('Enabled SSH automatic configuration for Windows.'));
         $settings['UserData'] = id(new WindowsZeroConf())
-          ->getEncodedUserData($credential);
+          ->getEncodedUserData($credential, $this->getDetail('protocol'));
       }
     }
 
@@ -428,8 +451,10 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       ->setAttributes(array(
         'instance-id' => $instance_id,
         'platform' => $this->getDetail('platform'),
+        'protocol' => $this->getDetail('protocol'),
         'path' => $this->getDetail('storage-path'),
         'credential' => $credential->getID(),
+        'winrm-auth' => $winrm_auth_id,
         'aws-status' => 'Instance Requested'))
       ->save();
 
@@ -638,37 +663,46 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     // Update address and port attributes.
     $resource->setAttribute('host', $address);
-    $resource->setAttribute('port', 22);
+    if ($resource->getAttribute('protocol') === 'winrm') {
+      $resource->setAttribute('port', 5985);
+    } else {
+      $resource->setAttribute('port', 22);
+    }
     $resource->save();
 
-    $this->log(pht(
-      'Waiting for a successful SSH connection'));
+    $protocol_name = '';
+    if ($resource->getAttribute('protocol') === 'winrm') {
+      $protocol_name = 'WinRM';
+    } else {
+      $protocol_name = 'SSH';
+    }
 
-    // Wait until we get a successful SSH connection.
-    $ssh = id(new DrydockSSHCommandInterface())
-      ->setConfiguration(array(
-        'host' => $resource->getAttribute('host'),
-        'port' => $resource->getAttribute('port'),
-        'credential' => $resource->getAttribute('credential'),
-        'platform' => $resource->getAttribute('platform')));
-    $ssh->setConnectTimeout(60);
+    $this->log(pht(
+      'Waiting for a successful %s connection', $protocol_name));
+
+    // Wait until we get a successful connection.
+    $ssh = $this->getInterface($resource, $lease, 'command');
     $ssh->setExecTimeout(60);
+    if ($resource->getAttribute('protocol') === 'ssh') {
+      $ssh->setConnectTimeout(60);
+    }
 
     $resource->setAttribute(
       'aws-status',
-      'Waiting for successful SSH connection');
+      'Waiting for successful %s connection', $protocol_name);
     $resource->save();
 
     while (true) {
       try {
         $this->log(pht(
-          'Attempting to connect to \'%s\' via SSH',
-          $instance_id));
+          'Attempting to connect to \'%s\' via %s',
+          $instance_id,
+          $protocol_name));
 
         $ssh_future = $ssh->getExecFuture('echo "test"');
         $ssh_future->resolvex();
         if ($ssh_future->getWasKilledByTimeout()) {
-          throw new Exception('SSH execution timed out.');
+          throw new Exception('%s execution timed out.', $protocol_name);
         }
 
         break;
@@ -688,7 +722,8 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         $instance_state = (string)$instance->instanceState->name;
 
         $this->log(pht(
-          'SSH connection not yet ready; instance is in state \'%s\'',
+          '%s connection not yet ready; instance is in state \'%s\'',
+          $protocol_name,
           $instance_state));
 
         if ($instance_state === 'shutting-down' ||
@@ -696,8 +731,9 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
           $this->log(pht(
             'Instance has ended up in state \'%s\' while waiting for an '.
-            'SSH connection',
-            $instance_state));
+            '%s connection',
+            $instance_state,
+            $protocol_name));
 
           // Deallocate and release the public IP address if we allocated one.
           if ($resource->getAttribute('eip-allocated')) {
@@ -950,13 +986,25 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     switch ($type) {
       case 'command':
-        return id(new DrydockSSHCommandInterface())
-          ->setConfiguration(array(
-            'host' => $resource->getAttribute('host'),
-            'port' => $resource->getAttribute('port'),
-            'credential' => $resource->getAttribute('credential'),
-            'platform' => $resource->getAttribute('platform')))
-          ->setWorkingDirectory($lease->getAttribute('path'));
+        if ($resource->getAttribute('protocol') === 'ssh') {
+          return id(new DrydockSSHCommandInterface())
+            ->setConfiguration(array(
+              'host' => $resource->getAttribute('host'),
+              'port' => $resource->getAttribute('port'),
+              'credential' => $resource->getAttribute('credential'),
+              'platform' => $resource->getAttribute('platform')))
+            ->setWorkingDirectory($lease->getAttribute('path'));
+        } else if ($resource->getAttribute('protocol') === 'winrm') {
+          return id(new DrydockWinRMCommandInterface())
+            ->setConfiguration(array(
+              'host' => $resource->getAttribute('host'),
+              'port' => $resource->getAttribute('port'),
+              'credential' => $resource->getAttribute('winrm-auth'),
+              'platform' => $resource->getAttribute('platform')))
+            ->setWorkingDirectory($lease->getAttribute('path'));
+        } else {
+          throw new Exception('Unsupported protocol for remoting');
+        }
       case 'filesystem':
         return id(new DrydockSFTPFilesystemInterface())
           ->setConfiguration(array(
@@ -1007,6 +1055,22 @@ final class DrydockAmazonEC2HostBlueprintImplementation
         'required' => true,
         'caption' => pht('e.g. %s or %s', 'windows', 'linux')
       ),
+      'protocol' => array(
+        'name' => pht('Protocol'),
+        'type' => 'select',
+        'required' => true,
+        'options' => array(
+          'ssh' => 'SSH',
+          'winrm' => 'WinRM (Windows platform only)'),
+      ),
+      'winrm-auth' => array(
+        'name' => pht('WinRM Credentials'),
+        'type' => 'credential',
+        'credential.provides'
+          => PassphraseCredentialTypePassword::PROVIDES_TYPE,
+        'caption' => pht(
+          'This is only required if the protocol is set to WinRM.')
+      ),
       'subnet-id' => array(
         'name' => pht('VPC Subnet'),
         'type' => 'text',
@@ -1049,13 +1113,14 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           'connect to the machine on it\'s private IP address (because of '.
           'firewall rules).'),
       ),
-      'skip-ssh-setup-windows' => array(
-        'name' => pht('Skip SSH setup on Windows'),
+      'skip-setup-windows' => array(
+        'name' => pht('Skip setup on Windows'),
         'type' => 'bool',
         'caption' => pht(
-          'If SSH is already configured on a Windows AMI, check this option.  '.
-          'By default, Phabricator will automatically install and configure '.
-          'SSH on the Windows image.')
+          'If SSH or WinRM is already configured on a Windows AMI, check '.
+          'this option.  By default, Phabricator will automatically install '.
+          'and configure SSH or WinRM on the Windows image (depending on the '.
+          'protocol chosen).')
       ),
       'spot' => array(
         'name' => pht('Spot Instances'),
