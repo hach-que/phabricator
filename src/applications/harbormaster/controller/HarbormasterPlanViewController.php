@@ -36,7 +36,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
     $title = pht('Plan %d', $id);
 
     $header = id(new PHUIHeaderView())
-      ->setHeader($title)
+      ->setHeader($plan->getName())
       ->setUser($viewer)
       ->setPolicyObject($plan);
 
