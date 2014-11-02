@@ -75,11 +75,6 @@ final class DrydockAmazonEC2HostBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
-    // Allow other workers to start leasing against this.
-    $resource
-      ->setStatus(DrydockResourceStatus::STATUS_PENDING)
-      ->save();
-
     // We need to retrieve this as we need to use it for both importing the
     // key and looking up the ID for the resource attributes.
     $credential = id(new PassphraseCredentialQuery())

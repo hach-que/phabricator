@@ -309,6 +309,27 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
             'Blueprint allocated a resource, but can\'t lease against it.');
         }
 
+        $this->logToDrydock(
+          pht('Pre-emptively allocated the lease against the new resource.'));
+
+        // We now have to set the resource into Pending status, now that the
+        // initial lease has been grabbed on the resource.  This ensures that
+        // as soon as we leave the lock, other allocators can start taking
+        // leases on it.  If we didn't do this, we can run into a scenario
+        // where all resources are in "ALLOCATING" status when an allocator
+        // runs, and instead of overleasing, the request would fail.
+        //
+        // TODO: I think this means we can remove the "ALLOCATING" status now,
+        // but I'm not entirely sure.  It's only ever used inside the lock, so
+        // I don't think any other allocators can race when attempting to
+        // use a still-allocating resource.
+        $resource
+          ->setStatus(DrydockResourceStatus::STATUS_PENDING)
+          ->save();
+
+        $this->logToDrydock(
+          pht('Moved the resource to the pending status.'));
+
         $lock->unlock();
       } catch (Exception $ex) {
         $lock->unlock();
