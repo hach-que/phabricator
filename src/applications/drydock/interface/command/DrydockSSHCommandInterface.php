@@ -83,7 +83,7 @@ EOF;
         'ConnectTimeout='.$this->connectTimeout);
     }
 
-    return new ExecFuture(
+    $future = new ExecFuture(
       'ssh '.
       '-o LogLevel=quiet '.
       '-o StrictHostKeyChecking=no '.
@@ -96,5 +96,7 @@ EOF;
       $this->passphraseSSHKey->getUsernameEnvelope(),
       $this->getConfig('host'),
       $full_command);
+    $future->setPowershellXML($this->getConfig('platform') === 'windows');
+    return $future;
   }
 }
