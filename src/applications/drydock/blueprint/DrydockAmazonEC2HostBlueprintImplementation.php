@@ -90,8 +90,6 @@ final class DrydockAmazonEC2HostBlueprintImplementation
 
     $settings = array(
       'ImageId' => $this->getDetail('ami'),
-      'MinCount' => 1,
-      'MaxCount' => 1,
       'KeyName' => $this->getAWSKeyPairName(),
       'InstanceType' => $this->getDetail('size'),
       'SubnetId' => $this->getDetail('subnet-id')
@@ -111,14 +109,78 @@ final class DrydockAmazonEC2HostBlueprintImplementation
       }
     }
 
-    $result = $this->getAWSEC2Future()
-      ->setRawAWSQuery(
-        'RunInstances',
-        $settings)
-      ->resolve();
+    if ($this->getDetail('spot-enabled') &&
+      $this->getDetail('spot-price') !== null) {
 
-    $instance = $result->instancesSet->item[0];
-    $instance_id = (string)$instance->instanceId;
+      $spot_settings = array(
+        'SpotPrice' => $this->getDetail('spot-price'),
+        'InstanceCount' => 1,
+        'Type' => 'one-time');
+
+      foreach ($settings as $key => $value) {
+        $spot_settings['LaunchSpecification.'.$key] = $value;
+      }
+
+      $result = $this->getAWSEC2Future()
+        ->setRawAWSQuery(
+          'RequestSpotInstances',
+          $spot_settings)
+        ->resolve();
+
+      $spot_request = $result->spotInstanceRequestSet->item[0];
+      $spot_request_id = (string)$spot_request->spotInstanceRequestId;
+
+      // Wait until the spot instance request is fulfilled.
+      while (true) {
+        try {
+          $result = $this->getAWSEC2Future()
+            ->setRawAWSQuery(
+              'DescribeSpotInstanceRequests',
+              array(
+                'SpotInstanceRequestId.0' => $spot_request_id))
+            ->resolve();
+        } catch (PhutilAWSException $ex) {
+          // AWS does not provide immediate consistency, so this may throw
+          // "spot request does not exist" right after requesting spot
+          // instances.
+          continue;
+        }
+
+        $spot_request = $result->spotInstanceRequestSet->item[0];
+
+        $spot_state = (string)$spot_request->state;
+
+        if ($spot_state == 'open') {
+          // We are waiting for the request to be fulfilled.
+          sleep(5);
+          continue;
+        } else if ($spot_state == 'active') {
+          // The request has been fulfilled and we now have an instance ID.
+          $instance_id = (string)$spot_request->instanceId;
+          break;
+        } else {
+          // The spot request is closed, cancelled or failed.
+          throw new Exception(
+            'Requested a spot instance, but the request is in state '.
+            '"'.$spot_state.'".  This may occur when the current bid '.
+            'price exceeds your maximum bid price ('.
+            $this->getDetail('spot-price').
+            ').');
+        }
+      }
+    } else {
+      $settings['MinCount'] = 1;
+      $settings['MaxCount'] = 1;
+
+      $result = $this->getAWSEC2Future()
+        ->setRawAWSQuery(
+          'RunInstances',
+          $settings)
+        ->resolve();
+
+      $instance = $result->instancesSet->item[0];
+      $instance_id = (string)$instance->instanceId;
+    }
 
     // Allocate the resource and place it into Pending status while
     // we wait for the instance to start.
@@ -532,6 +594,28 @@ final class DrydockAmazonEC2HostBlueprintImplementation
           'If SSH is already configured on a Windows AMI, check this option.  '.
           'By default, Phabricator will automatically install and configure '.
           'SSH on the Windows image.')
+      ),
+      'spot' => array(
+        'name' => pht('Spot Instances'),
+        'type' => 'header'
+      ),
+      'spot-enabled' => array(
+        'name' => pht('Use Spot Instances'),
+        'type' => 'bool',
+        'caption' => pht(
+          'Use spot instances when allocating EC2 instances.  Spot instances '.
+          'are cheaper, but can be terminated at any time (for example, in '.
+          'the middle of a Harbormaster build)'),
+      ),
+      'spot-price' => array(
+        'name' => pht('Maximum Bid'),
+        'type' => 'decimal',
+        'caption' => pht(
+          'The maximum bid to pay per hour when running spot instances.  If '.
+          'the current bid price exceeds this amount, then the instance will '.
+          'be terminated.  WARNING: You should not set this higher '.
+          'than the On Demand price for this instance type, or you could end '.
+          'up paying more than the non-spot instance price.'),
       ),
     ) + parent::getFieldSpecifications();
   }
