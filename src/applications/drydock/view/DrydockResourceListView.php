@@ -14,6 +14,12 @@ final class DrydockResourceListView extends AphrontView {
     $resources = $this->resources;
     $viewer = $this->getUser();
 
+    $blueprint_handles = id(new PhabricatorHandleQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(mpull($resources, 'getBlueprintPHID'))
+      ->execute();
+    $blueprint_handles = mpull($blueprint_handles, null, 'getPHID');
+
     $view = new PHUIObjectItemListView();
     foreach ($resources as $resource) {
       $name = pht('Resource %d', $resource->getID()).': '.$resource->getName();
@@ -24,6 +30,13 @@ final class DrydockResourceListView extends AphrontView {
 
       $status = DrydockResourceStatus::getNameForStatus($resource->getStatus());
       $item->addAttribute($status);
+
+      $blueprint_handle = idx(
+        $blueprint_handles,
+        $resource->getBlueprintPHID());
+      if ($blueprint_handle !== null) {
+        $item->addAttribute($blueprint_handle->renderLink());
+      }
 
       switch ($resource->getStatus()) {
         case DrydockResourceStatus::STATUS_ALLOCATING:

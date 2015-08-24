@@ -17,6 +17,9 @@ final class DrydockResourceSearchEngine
     $saved->setParameter(
       'statuses',
       $this->readListFromRequest($request, 'statuses'));
+    $saved->setParameter(
+      'types',
+      $this->readListFromRequest($request, 'types'));
 
     return $saved;
   }
@@ -27,6 +30,11 @@ final class DrydockResourceSearchEngine
     $statuses = $saved->getParameter('statuses', array());
     if ($statuses) {
       $query->withStatuses($statuses);
+    }
+
+    $types = $saved->getParameter('types', array());
+    if ($types) {
+      $query->withTypes($types);
     }
 
     return $query;
@@ -50,6 +58,26 @@ final class DrydockResourceSearchEngine
 
     $form
       ->appendChild($status_control);
+
+    $types = $saved->getParameter('types', array());
+
+    $implementations =
+      DrydockBlueprintImplementation::getAllBlueprintImplementations();
+    $available_types = mpull($implementations, 'getType');
+    $available_types = array_unique($available_types);
+
+    $type_control = id(new AphrontFormCheckboxControl())
+      ->setLabel(pht('Resource Type'));
+    foreach ($available_types as $type) {
+      $type_control->addCheckbox(
+        'types[]',
+        $type,
+        $type,
+        in_array($type, $types));
+    }
+
+    $form
+      ->appendChild($type_control);
   }
 
   protected function getURI($path) {
@@ -74,6 +102,15 @@ final class DrydockResourceSearchEngine
           array(
             DrydockResourceStatus::STATUS_PENDING,
             DrydockResourceStatus::STATUS_OPEN,
+          ))->setParameter(
+          'types',
+          array(
+            'host',
+            'working-copy',
+            // Exclude working copy cache resources by default
+            // as they are not very useful to look at (and they
+            // don't yet get cleaned up with the host resource
+            // disappears).
           ));
       case 'all':
         return $query;
