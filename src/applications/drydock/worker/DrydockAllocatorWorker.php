@@ -116,6 +116,12 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
         continue;
       }
 
+      if ($lease->getAttribute('resourceID') !== null &&
+        $candidate->getID() !== $lease->getAttribute('resourceID')) {
+        unset($pool[$key]);
+        continue;
+      }
+
       $blueprint = $blueprints[$candidate->getBlueprintPHID()];
       $implementation = $blueprint->getImplementation();
 
@@ -156,6 +162,12 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
           continue;
         }
 
+        if ($lease->getAttribute('resourceID') !== null &&
+          $candidate->getID() !== $lease->getAttribute('resourceID')) {
+          unset($pool[$key]);
+          continue;
+        }
+
         $blueprint = $blueprints[$candidate->getBlueprintPHID()];
         $implementation = $blueprint->getImplementation();
 
@@ -185,6 +197,21 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
     if ($resource) {
       $lock->unlock();
     } else {
+      if ($lease->getAttribute('resourceID') !== null) {
+        $reason = pht(
+          'Could not lease against specific resource %d.',
+          $lease->getAttribute('resourceID'));
+
+        $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+        $lease->setBrokenReason($reason);
+        $lease->save();
+
+        $this->logToDrydock($reason);
+
+        $lock->unlock();
+        return;
+      }
+
       $blueprints = id(new DrydockBlueprintQuery())
         ->setViewer(PhabricatorUser::getOmnipotentUser())
         ->execute();
