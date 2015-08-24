@@ -35,7 +35,11 @@ final class HarbormasterBuildTargetPHIDType extends PhabricatorPHIDType {
       $build_id = $build->getID();
       $uri = "/harbormaster/build/{$build_id}/";
 
-      $handle->setName(pht('Build Target %d', $target_id));
+      $handle->setName(pht(
+        '\'%s\' on Build %d: %s',
+        $target->getName(),
+        $build_id,
+        $build->getName()));
       $handle->setURI($uri);
     }
   }

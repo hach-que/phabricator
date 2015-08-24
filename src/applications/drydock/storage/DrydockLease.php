@@ -13,6 +13,7 @@ final class DrydockLease extends DrydockDAO
   protected $isTransientLease = 0;
 
   private $resource = self::ATTACHABLE;
+  private $ownerHandle = self::ATTACHABLE;
   private $releaseOnDestruction;
 
   /**
@@ -91,6 +92,15 @@ final class DrydockLease extends DrydockDAO
 
   public function hasAttachedResource() {
     return ($this->resource !== null);
+  }
+
+  public function getOwnerHandle() {
+    return $this->assertAttached($this->ownerHandle);
+  }
+
+  public function attachOwnerHandle($handle) {
+    $this->ownerHandle = $handle;
+    return $this;
   }
 
   public function loadResource() {

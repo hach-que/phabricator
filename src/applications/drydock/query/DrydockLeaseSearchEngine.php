@@ -23,6 +23,7 @@ final class DrydockLeaseSearchEngine
 
   public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
     $query = id(new DrydockLeaseQuery());
+    $query->needOwnerHandles(true);
 
     $statuses = $saved->getParameter('statuses', array());
     if ($statuses) {

@@ -9,6 +9,7 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
     $lease = id(new DrydockLeaseQuery())
       ->setViewer($viewer)
       ->withIDs(array($id))
+      ->needOwnerHandles(true)
       ->executeOne();
     if (!$lease) {
       return new Aphront404Response();
@@ -128,6 +129,16 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
       $view->addProperty(
         pht('Resource'),
         pht('No Resource'));
+    }
+
+    if ($lease->getOwnerHandle() !== null) {
+      $view->addProperty(
+        pht('Owner'),
+        $lease->getOwnerHandle()->renderLink());
+    } else {
+      $view->addProperty(
+        pht('Owner'),
+        phutil_tag('em', array(), pht('No Owner')));
     }
 
     $view->addProperty(

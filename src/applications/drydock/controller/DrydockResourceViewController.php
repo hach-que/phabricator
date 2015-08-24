@@ -33,6 +33,7 @@ final class DrydockResourceViewController extends DrydockResourceController {
         DrydockLeaseStatus::STATUS_ACTIVE,
         DrydockLeaseStatus::STATUS_PENDING,
       ))
+      ->needOwnerHandles(true)
       ->execute();
 
     $lease_list = id(new DrydockLeaseListView())

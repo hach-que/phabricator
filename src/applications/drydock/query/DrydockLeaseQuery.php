@@ -7,6 +7,7 @@ final class DrydockLeaseQuery extends DrydockQuery {
   private $resourceIDs;
   private $statuses;
   private $datasourceQuery;
+  private $needOwnerHandles;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -41,6 +42,11 @@ final class DrydockLeaseQuery extends DrydockQuery {
     return $this->loadStandardPage($this->newResultObject());
   }
 
+  public function needOwnerHandles($owner_handles) {
+    $this->needOwnerHandles = $owner_handles;
+    return $this;
+  }
+
   protected function willFilterPage(array $leases) {
     $resource_ids = array_filter(mpull($leases, 'getResourceID'));
     if ($resource_ids) {
@@ -66,6 +72,30 @@ final class DrydockLeaseQuery extends DrydockQuery {
     }
 
     return $leases;
+  }
+
+  protected function didFilterPage(array $page) {
+    if ($this->needOwnerHandles) {
+      $owner_phids = mpull($page, 'getOwnerPHID');
+      foreach ($owner_phids as $key => $phid) {
+        if ($phid === null) {
+          unset($owner_phids[$key]);
+        }
+      }
+
+      $handles = id(new PhabricatorHandleQuery())
+        ->setViewer($this->getViewer())
+        ->setParentQuery($this)
+        ->withPHIDs($owner_phids)
+        ->execute();
+      $handles = mpull($handles, null, 'getPHID');
+
+      foreach ($page as $lease) {
+        $lease->attachOwnerHandle(idx($handles, $lease->getOwnerPHID()));
+      }
+    }
+
+    return $page;
   }
 
   protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {

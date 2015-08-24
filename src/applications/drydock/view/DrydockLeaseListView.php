@@ -41,6 +41,12 @@ final class DrydockLeaseListView extends AphrontView {
       $item->addAttribute($status);
       $item->setEpoch($lease->getDateCreated());
 
+      if ($lease->getOwnerHandle() !== null) {
+        $item->addAttribute($lease->getOwnerHandle()->renderLink());
+      } else {
+        $item->addAttribute(phutil_tag('em', array(), 'No Owner'));
+      }
+
       if ($lease->isActive()) {
         $item->setStatusIcon('fa-dot-circle-o green');
       } else {
