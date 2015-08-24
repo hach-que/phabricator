@@ -136,11 +136,19 @@ final class HarbormasterBuildable extends HarbormasterDAO
     }
   }
 
-  public function applyPlan(HarbormasterBuildPlan $plan) {
+  public function applyPlan(
+    HarbormasterBuildPlan $plan,
+    array $parameters = null) {
+
+    if ($parameters === null) {
+      $parameters = array();
+    }
+
     $viewer = PhabricatorUser::getOmnipotentUser();
     $build = HarbormasterBuild::initializeNewBuild($viewer)
       ->setBuildablePHID($this->getPHID())
       ->setBuildPlanPHID($plan->getPHID())
+      ->setBuildParameters($parameters)
       ->setBuildStatus(HarbormasterBuild::STATUS_PENDING);
 
     $auto_key = $plan->getPlanAutoKey();

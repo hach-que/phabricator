@@ -33,11 +33,48 @@ final class HarbormasterRunBuildPlanBuildImplementation
       $name);
   }
 
+  public function parseParameters(
+    HarbormasterBuildTarget $build_target,
+    $text) {
+
+    if (trim($text) === '') {
+      return array();
+    }
+
+    $variables = $build_target->getVariables();
+    $text = $this->mergeVariables(
+      'vsprintf',
+      $text,
+      $variables);
+
+    $pairs = phutil_split_lines($text);
+    $attributes = array();
+
+    foreach ($pairs as $line) {
+      $kv = explode('=', $line, 2);
+      if (count($kv) === 0) {
+        continue;
+      } else if (count($kv) === 1) {
+        $attributes[$kv[0]] = true;
+      } else {
+        $attributes[$kv[0]] = trim($kv[1]);
+      }
+    }
+
+    return $attributes;
+  }
+
   public function execute(
     HarbormasterBuild $build,
     HarbormasterBuildTarget $build_target) {
 
     $target_plan_id = $this->getSetting('id');
+
+    $parameters = self::parseParameters(
+      $build_target,
+      $this->getSetting('parameters'));
+    $parameters_hash =
+      HarbormasterBuild::getBuildParametersHashForArray($parameters);
 
     // Get the target build plan type.
     $target_plan = id(new HarbormasterBuildPlanQuery())
@@ -64,7 +101,8 @@ final class HarbormasterRunBuildPlanBuildImplementation
     // Find the build for that build plan (if it exists).
     $target_build = null;
     foreach ($other_builds as $other_build) {
-      if ($other_build->getBuildPlanPHID() === $target_plan->getPHID()) {
+      if ($other_build->getBuildPlanPHID() === $target_plan->getPHID() &&
+        $other_build->getBuildParametersHash() === $parameters_hash) {
         $target_build = $other_build;
         break;
       }
@@ -73,7 +111,9 @@ final class HarbormasterRunBuildPlanBuildImplementation
     if ($target_build === null) {
       // There is no current build with this build plan on the buildable,
       // so now we're going to start one.
-      $target_build = $build->getBuildable()->applyPlan($target_plan);
+      $target_build = $build->getBuildable()->applyPlan(
+        $target_plan,
+        $parameters);
     } else {
       // If the build plan has failed on a previous run, restart it.
       switch ($target_build->getBuildStatus()) {
@@ -162,6 +202,14 @@ final class HarbormasterRunBuildPlanBuildImplementation
         'name' => pht('Target Build Plan ID'),
         'type' => 'text',
         'required' => true,
+      ),
+      'parameters' => array(
+        'name' => pht('Build Plan Parameters'),
+        'type' => 'textarea',
+        'caption' => pht(
+          'A newline separated list of parameters to pass into the build.  '.
+          'Each attribute should be specified in a key=value format.'),
+        'monospace' => true,
       ),
     );
   }

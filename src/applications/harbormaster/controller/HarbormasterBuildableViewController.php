@@ -182,7 +182,7 @@ final class HarbormasterBuildableViewController
       $view_uri = $this->getApplicationURI('/build/'.$build->getID().'/');
       $item = id(new PHUIObjectItemView())
         ->setObjectName(pht('Build %d', $build->getID()))
-        ->setHeader($build->getName())
+        ->setHeader($build->getNameWithMergedParameters())
         ->setHref($view_uri);
 
       $status = $build->getBuildStatus();
@@ -191,6 +191,10 @@ final class HarbormasterBuildableViewController
         HarbormasterBuild::getBuildStatusName($status));
 
       $item->addAttribute(HarbormasterBuild::getBuildStatusName($status));
+      $parameters = $build->getBuildParametersAsString();
+      if ($parameters !== '') {
+        $item->addAttribute($parameters);
+      }
 
       if ($build->isRestarting()) {
         $item->addIcon('fa-repeat', pht('Restarting'));
@@ -243,7 +247,7 @@ final class HarbormasterBuildableViewController
           $status_name =
             HarbormasterBuildTarget::getBuildTargetStatusName($status);
 
-          $name = $target->getName();
+          $name = $target->getNameWithMergedParameters($build);
 
           $target_list->addItem(
             id(new PHUIStatusItemView())

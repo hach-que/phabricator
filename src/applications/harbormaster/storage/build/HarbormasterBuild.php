@@ -9,6 +9,8 @@ final class HarbormasterBuild extends HarbormasterDAO
   protected $buildPlanPHID;
   protected $buildStatus;
   protected $buildGeneration;
+  protected $buildParameters;
+  protected $buildParametersHash;
   protected $planAutoKey;
 
   private $buildable = self::ATTACHABLE;
@@ -138,10 +140,43 @@ final class HarbormasterBuild extends HarbormasterDAO
     }
   }
 
-  public static function initializeNewBuild(PhabricatorUser $actor) {
+  public static function initializeNewBuild(
+    PhabricatorUser $actor) {
     return id(new HarbormasterBuild())
       ->setBuildStatus(self::STATUS_INACTIVE)
-      ->setBuildGeneration(0);
+      ->setBuildGeneration(0)
+      ->setBuildParameters(array());
+  }
+
+  public function setBuildParameters(array $parameters) {
+    $this->buildParameters = $parameters;
+    $this->buildParametersHash =
+      self::getBuildParametersHashForArray($parameters);
+    return $this;
+  }
+
+  public function getBuildParameters() {
+    if ($this->buildParameters === null) {
+      return array();
+    }
+
+    return $this->buildParameters;
+  }
+
+  public function getBuildParametersAsString() {
+    $strs = array();
+    $parameters = $this->buildParameters;
+    if ($parameters === null) {
+      $parameters = array();
+    }
+    foreach ($parameters as $key => $value) {
+      $strs[] = $key.'='.$value;
+    }
+    return implode(', ', $strs);
+  }
+
+  public static function getBuildParametersHashForArray(array $parameters) {
+    return md5(print_r($parameters, true));
   }
 
   public function delete() {
@@ -156,9 +191,14 @@ final class HarbormasterBuild extends HarbormasterDAO
   protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
+      self::CONFIG_SERIALIZATION => array(
+        'buildParameters' => self::SERIALIZATION_JSON,
+      ),
       self::CONFIG_COLUMN_SCHEMA => array(
         'buildStatus' => 'text32',
         'buildGeneration' => 'uint32',
+        'buildParameters' => 'text',
+        'buildParametersHash' => 'text32',
         'planAutoKey' => 'text32?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
@@ -198,6 +238,31 @@ final class HarbormasterBuild extends HarbormasterDAO
       return $this->getBuildPlan()->getName();
     }
     return pht('Build');
+  }
+
+  public static function mergeParameters($pattern, $parameters) {
+    $regexp = '/\\$\\{(?P<name>[a-zA-Z\\.]+)\\}/';
+
+    $matches = null;
+    preg_match_all($regexp, $pattern, $matches);
+
+    $argv = array();
+    foreach ($matches['name'] as $name) {
+      if (array_key_exists($name, $parameters)) {
+        $argv[] = '['.$parameters[$name].']';
+      }
+    }
+
+    $pattern = str_replace('%', '%%', $pattern);
+    $pattern = preg_replace($regexp, '%s', $pattern);
+
+    return vsprintf($pattern, $argv);
+  }
+
+  public function getNameWithMergedParameters() {
+    $name = $this->getName();
+    $parameters = $this->getBuildParameters();
+    return self::mergeParameters($name, $parameters);
   }
 
   public function attachBuildPlan(
@@ -246,6 +311,11 @@ final class HarbormasterBuild extends HarbormasterDAO
   }
 
   public function retrieveVariablesFromBuild() {
+    $parameters = $this->getBuildParameters();
+    if ($parameters === null) {
+      $parameters = array();
+    }
+
     $results = array(
       'buildable.diff' => null,
       'buildable.revision' => null,
@@ -255,7 +325,7 @@ final class HarbormasterBuild extends HarbormasterDAO
       'repository.uri' => null,
       'step.timestamp' => null,
       'build.id' => null,
-    );
+    ) + $parameters;
 
     $buildable = $this->getBuildable();
     $object = $buildable->getBuildableObject();

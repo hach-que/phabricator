@@ -84,7 +84,7 @@ final class HarbormasterBuildViewController
     $targets = array();
     foreach ($build_targets as $build_target) {
       $header = id(new PHUIHeaderView())
-        ->setHeader($build_target->getName())
+        ->setHeader($build_target->getNameWithMergedParameters($build))
         ->setUser($viewer);
 
       $target_box = id(new PHUIObjectBoxView())
@@ -223,6 +223,9 @@ final class HarbormasterBuildViewController
       $target_box->addPropertyList($properties, pht('Messages'));
 
       $properties = new PHUIPropertyListView();
+      $properties->addProperty(
+        pht('Original Name'),
+        $build_target->getName());
       $properties->addProperty(
         pht('Build Target ID'),
         $build_target->getID());
@@ -519,12 +522,20 @@ final class HarbormasterBuildViewController
       $handles[$build->getBuildPlanPHID()]->renderLink());
 
     $properties->addProperty(
+      pht('Build Name'),
+      $build->getNameWithMergedParameters());
+
+    $properties->addProperty(
       pht('Restarts'),
       $build->getBuildGeneration());
 
     $properties->addProperty(
       pht('Status'),
       $this->getStatus($build));
+
+    $properties->addProperty(
+      pht('Parameters'),
+      $this->buildProperties($build->getBuildParameters()));
   }
 
   private function getStatus(HarbormasterBuild $build) {

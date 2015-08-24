@@ -195,6 +195,12 @@ final class HarbormasterBuildTarget extends HarbormasterDAO
     }
   }
 
+  public function getNameWithMergedParameters(HarbormasterBuild $build) {
+    $name = $this->getName();
+    $parameters = $build->getBuildParameters();
+    return HarbormasterBuild::mergeParameters($name, $parameters);
+  }
+
   private function getBuildTargetVariables() {
     return array(
       'target.phid' => $this->getPHID(),
