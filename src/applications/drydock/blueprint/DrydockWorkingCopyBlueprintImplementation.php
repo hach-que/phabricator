@@ -271,6 +271,13 @@ final class DrydockWorkingCopyBlueprintImplementation
       $this->log(pht('Checked out commit'));
     } else if ($lease->getAttribute('resolved.target') === 'diff') {
       $this->log(pht(
+        'Fetching diff tag from origin'));
+      $cmd->exec(
+        'git fetch origin +refs/tags/phabricator/diff/%d:'.
+        'refs/tags/phabricator/diff/%d',
+        $lease->getAttribute('resolved.diffID'),
+        $lease->getAttribute('resolved.diffID'));
+      $this->log(pht(
         'Checking out target diff at tag "phabricator/diff/%d"',
         $lease->getAttribute('resolved.diffID')));
       $cmd->execx(
