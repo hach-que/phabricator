@@ -82,6 +82,39 @@ final class PhragmentFragment extends PhragmentDAO
     $view_policy = null,
     $edit_policy = null) {
 
+    // Calculate all preceding paths.
+    $path_components = explode('/', $path);
+    array_pop($path_components);
+    $path_preceding = array();
+    $path_buffer = '';
+    for ($i = 0; $i < count($path_components); $i++) {
+      $path_buffer .= $path_components[$i].'/';
+      $path_preceding[] = rtrim($path_buffer, '/');
+    }
+
+    // Query for preceding fragments (use omnipotent user so
+    // we don't double up on paths because the user can't see
+    // them).
+    $preceding_fragments = id(new PhragmentFragmentQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withPaths($path_preceding)
+      ->execute();
+    $preceding_fragments = mpull($preceding_fragments, null, 'getPath');
+
+    // Create preceding path fragments.
+    foreach ($path_preceding as $path_to_check) {
+      if (!array_key_exists($path_to_check, $preceding_fragments)) {
+        $fragment = id(new PhragmentFragment());
+        $fragment->setPath($path_to_check);
+        $fragment->setDepth(count(explode('/', $path_to_check)));
+        $fragment->setLatestVersionPHID(null);
+        $fragment->setViewPolicy($view_policy);
+        $fragment->setEditPolicy($edit_policy);
+        $fragment->save();
+      }
+    }
+
+    // Create the new fragment.
     $fragment = id(new PhragmentFragment());
     $fragment->setPath($path);
     $fragment->setDepth(count(explode('/', $path)));
@@ -180,32 +213,26 @@ final class PhragmentFragment extends PhragmentDAO
       $mappings[$path] = $data;
     }
 
-    // We need to detect any directories that are in the ZIP folder that
-    // aren't explicitly noted in the ZIP. This can happen if the file
-    // entries in the ZIP look like:
+
+    // Sort the mappings by key in the dictionary, so that iterating over it
+    // will result in entries like:
     //
-    //  * something/blah.png
-    //  * something/other.png
-    //  * test.png
+    // a/ => null
+    // a/e.txt => ...
+    // b/c.txt => ...
+    // b/d.txt => ...
     //
-    // Where there is no explicit "something/" entry.
-    foreach ($mappings as $path_key => $data) {
-      if ($data === null) {
-        continue;
-      }
-      $directory = dirname($path_key);
-      while ($directory !== '.') {
-        if (!array_key_exists($directory, $mappings)) {
-          $mappings[$directory] = null;
-        }
-        if (dirname($directory) === $directory) {
-          // dirname() will not reduce this directory any further; to
-          // prevent infinite loop we just break out here.
-          break;
-        }
-        $directory = dirname($directory);
-      }
-    }
+    // This is important because if there are explicit directory entries in the
+    // ZIP, that might be because they are empty directories (in which case
+    // there's no call to self::createFromFile that would create them) or they
+    // could be out-of-order explicit directories where an unsorted list
+    // would cause a duplicate key exception.  By sorting this, we ensure that
+    // explicit directories are always created before files that reside in them.
+    ksort($mappings);
+
+    // We no longer need to explicitly create directories that are not
+    // set in the ZIP.  The self::createFromFile function automatically
+    // creates preceding directories for file entries.
 
     // Adjust the paths relative to this fragment so we can look existing
     // fragments up in the DB.
@@ -216,8 +243,8 @@ final class PhragmentFragment extends PhragmentDAO
     }
 
     // FIXME: What happens when a child exists, but the current user
-    // can't see it. We're going to create a new child with the exact
-    // same path and then bad things will happen.
+    // can't see it.  We're going to place a new child under a path
+    // that the current user can't access.
     $children = id(new PhragmentFragmentQuery())
       ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->needLatestVersion(true)
