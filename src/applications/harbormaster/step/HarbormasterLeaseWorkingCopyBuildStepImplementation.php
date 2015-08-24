@@ -40,14 +40,23 @@ abstract class HarbormasterLeaseWorkingCopyBuildStepImplementation
           + $custom_attributes)
         ->queueForActivation();
 
-      // Create the associated artifact.
-      $artifact = $build_target->createArtifact(
-        PhabricatorUser::getOmnipotentUser(),
-        $settings['name'],
-        HarbormasterHostArtifact::ARTIFACTCONST,
-        array(
-          'drydockLeasePHID' => $lease->getPHID(),
-        ));
+      try {
+        // Create the associated artifact.
+        $artifact = $build_target->createArtifact(
+          PhabricatorUser::getOmnipotentUser(),
+          $settings['name'],
+          HarbormasterHostArtifact::ARTIFACTCONST,
+          array(
+            'drydockLeasePHID' => $lease->getPHID(),
+          ));
+      } catch (Exception $ex) {
+        // Make sure the lease is released if we fail
+        // for any reason.
+        $lease->reload();
+        $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+        $lease->save();
+        throw $ex;
+      }
     } else {
       // Load the lease.
       $impl = $artifact->getArtifactImplementation();
