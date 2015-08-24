@@ -17,6 +17,7 @@ final class DrydockLog extends DrydockDAO
     return array(
       self::CONFIG_TIMESTAMPS => false,
       self::CONFIG_COLUMN_SCHEMA => array(
+        'blueprintPHID' => 'phid?',
         'resourceID' => 'id?',
         'leaseID' => 'id?',
         'message' => 'text',
