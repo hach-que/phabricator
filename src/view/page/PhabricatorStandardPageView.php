@@ -455,7 +455,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
           $client_uri->setDomain($this_host->getDomain());
         }
 
-        if ($request->isHTTPS()) {
+        if ($request->isHTTPS() || true) {
           $client_uri->setProtocol('wss');
         } else {
           $client_uri->setProtocol('ws');
