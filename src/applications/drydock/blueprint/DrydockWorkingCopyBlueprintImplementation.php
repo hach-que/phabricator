@@ -225,7 +225,6 @@ final class DrydockWorkingCopyBlueprintImplementation
       $resource->reload();
     }
 
-    $this->log('Acquiring new host lease for working copy...');
 
     $host_attributes = array();
     foreach ($lease->getAttributes() as $key => $value) {
@@ -241,10 +240,15 @@ final class DrydockWorkingCopyBlueprintImplementation
         array(
           'platform' => $lease->getAttribute('platform'),
         ) + $host_attributes)
-      ->waitUntilActive();
+      ->queueForActivation();
 
+    $this->log(pht(
+      'Acquiring new host lease %d for working copy...',
+      $host_lease->getID()));
     $lease->setAttribute('host.lease', $host_lease->getID());
     $lease->setAttribute('host.lease.phid', $host_lease->getPHID());
+
+    $host_lease->waitUntilActive();
 
     list($cache_lease, $source_url) = $this->tryAcquireWorkingCopyCache(
       $host_lease->getResource(),
