@@ -18,10 +18,16 @@ final class HarbormasterLeaseWorkingCopyFromRepositoryBuildStepImplementation
     HarbormasterBuildTarget $build_target,
     array $settings) {
 
+    $variables = $build_target->getVariables();
+    $ref = $this->mergeVariables(
+      'vsprintf',
+      idx($settings, 'ref'),
+      $variables);
+
     return array(
       'repositoryPHID' =>
         head(phutil_json_decode(idx($settings, 'repositoryPHID'))),
-      'ref' => idx($settings, 'ref'),
+      'ref' => $ref,
     );
   }
 

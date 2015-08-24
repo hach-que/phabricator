@@ -18,9 +18,19 @@ final class HarbormasterLeaseWorkingCopyFromURLBuildStepImplementation
     HarbormasterBuildTarget $build_target,
     array $settings) {
 
+    $variables = $build_target->getVariables();
+    $url = $this->mergeVariables(
+      'vsprintf',
+      idx($settings, 'url'),
+      $variables);
+    $ref = $this->mergeVariables(
+      'vsprintf',
+      idx($settings, 'ref'),
+      $variables);
+
     return array(
-      'url' => idx($settings, 'url'),
-      'ref' => idx($settings, 'ref'),
+      'url' => $url,
+      'ref' => $ref,
     );
   }
 
