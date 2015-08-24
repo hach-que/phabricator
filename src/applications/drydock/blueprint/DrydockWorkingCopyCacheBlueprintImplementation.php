@@ -104,6 +104,7 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
       $host_lease->getAttribute('path')));
 
     $cmd = $this->getCommandInterfaceForLease($host_lease);
+    $cmd->setExecTimeout(3600);
     $cmd->execx(
       'git clone --bare %s .',
       $url);
@@ -175,6 +176,7 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
     $lock->lock(1000000);
     try {
       $cmd = $this->getCommandInterfaceForLease($host_lease);
+      $cmd->setExecTimeout(3600);
 
       $this->log(pht(
         'Fetching latest commits for repository at "%s"',

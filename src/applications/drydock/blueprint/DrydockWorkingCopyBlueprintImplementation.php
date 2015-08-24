@@ -249,6 +249,7 @@ final class DrydockWorkingCopyBlueprintImplementation
       $lease->getAttribute('resolved.repositoryURL'));
 
     $cmd = $this->getCommandInterfaceForLease($lease);
+    $cmd->setExecTimeout(3600);
 
     $this->log(pht(
       'Cloning from "%s" to lease path "%s"',
@@ -395,6 +396,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     $cmd = $this->getCommandInterfaceForLease($target_lease);
     $cmd->setWorkingDirectory($target_path);
+    $cmd->setExecTimeout(3600);
 
     $this->log(pht(
       'Initializing submodules in %s',
