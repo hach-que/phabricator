@@ -32,6 +32,7 @@ abstract class PhabricatorProjectController extends PhabricatorController {
         $nav->addFilter("profile/{$id}/", pht('Profile'));
         $nav->addFilter("board/{$id}/", pht('Workboard'));
         $nav->addFilter("members/{$id}/", pht('Members'));
+        $nav->addFilter("sprint/{$id}/", pht('Sprint'));
         $nav->addFilter("feed/{$id}/", pht('Feed'));
         $nav->addFilter("details/{$id}/", pht('Edit Details'));
       }
@@ -83,6 +84,7 @@ abstract class PhabricatorProjectController extends PhabricatorController {
 
     $nav->addIcon("feed/{$id}/", pht('Feed'), 'fa-newspaper-o');
     $nav->addIcon("members/{$id}/", pht('Members'), 'fa-group');
+    $nav->addIcon("sprint/{$id}/", pht('Sprint'), 'fa-line-chart');
     $nav->addIcon("details/{$id}/", pht('Edit Details'), 'fa-pencil');
 
     return $nav;

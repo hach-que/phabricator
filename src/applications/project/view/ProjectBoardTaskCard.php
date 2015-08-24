@@ -39,7 +39,7 @@ final class ProjectBoardTaskCard extends Phobject {
   public function getCanEdit() {
     return $this->canEdit;
   }
-
+  
   public function getItem() {
     $task = $this->getTask();
     $owner = $this->getOwner();
@@ -72,7 +72,36 @@ final class ProjectBoardTaskCard extends Phobject {
     if ($owner) {
       $card->addAttribute($owner->renderLink());
     }
+    
+    // HACK: Support showing points in Games Project
+    $field_list = PhabricatorCustomField::getObjectFields(
+      $task,
+      PhabricatorCustomField::ROLE_VIEW);
+    $field_list->readFieldsFromStorage($task);
+    $field_list = mpull($field_list->getFields(), null, 'getFieldKey');
+    $points = idx($field_list, 'std:maniphest:games-project:points');
 
+    $gp_points_name = null;
+    if ($points !== null) {
+      $gp_points_name = $points->renderPropertyViewValue(array());
+      if ($gp_points_name != '' && $gp_points_name !== 'Not Applicable') {
+        if (strlen($gp_points_name) < 3) {
+          if ($gp_points_name == '1') {
+            $gp_points_name = $gp_points_name.' Point';
+          } else {
+            $gp_points_name = $gp_points_name.' Points';
+          }
+        }
+        if ($gp_points_name == '') {
+          $gp_points_name = null;
+        }
+      }
+    }
+    
+    if ($gp_points_name !== null) {
+      $card->addAttribute($gp_points_name);
+    }
+    
     return $card;
   }
 

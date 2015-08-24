@@ -2658,6 +2658,7 @@ phutil_register_library_map(array(
     'PhabricatorProjectSearchField' => 'applications/project/searchfield/PhabricatorProjectSearchField.php',
     'PhabricatorProjectSearchIndexer' => 'applications/project/search/PhabricatorProjectSearchIndexer.php',
     'PhabricatorProjectSlug' => 'applications/project/storage/PhabricatorProjectSlug.php',
+    'PhabricatorProjectSprintController' => 'applications/project/controller/PhabricatorProjectSprintController.php',
     'PhabricatorProjectStandardCustomField' => 'applications/project/customfield/PhabricatorProjectStandardCustomField.php',
     'PhabricatorProjectStatus' => 'applications/project/constants/PhabricatorProjectStatus.php',
     'PhabricatorProjectTestDataGenerator' => 'applications/project/lipsum/PhabricatorProjectTestDataGenerator.php',
@@ -6697,6 +6698,7 @@ phutil_register_library_map(array(
     'PhabricatorProjectSearchField' => 'PhabricatorSearchTokenizerField',
     'PhabricatorProjectSearchIndexer' => 'PhabricatorSearchDocumentIndexer',
     'PhabricatorProjectSlug' => 'PhabricatorProjectDAO',
+    'PhabricatorProjectSprintController' => 'PhabricatorProjectController',
     'PhabricatorProjectStandardCustomField' => array(
       'PhabricatorProjectCustomField',
       'PhabricatorStandardCustomFieldInterface',
