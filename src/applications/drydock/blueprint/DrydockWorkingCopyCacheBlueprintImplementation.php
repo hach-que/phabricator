@@ -95,7 +95,9 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
       $host_lease->getID()));
 
     $resource
+      ->setAttribute('host.resource.phid', $host_lease->getResourcePHID())
       ->setAttribute('host.lease', $host_lease->getID())
+      ->setAttribute('host.lease.phid', $host_lease->getPHID())
       ->save();
 
     $this->log(pht(

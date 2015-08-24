@@ -236,6 +236,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     $host_lease = id(new DrydockLease())
       ->setResourceType('host')
+      ->setOwnerPHID($lease->getPHID())
       ->setAttributes(
         array(
           'platform' => $lease->getAttribute('platform'),
@@ -243,9 +244,11 @@ final class DrydockWorkingCopyBlueprintImplementation
       ->waitUntilActive();
 
     $lease->setAttribute('host.lease', $host_lease->getID());
+    $lease->setAttribute('host.lease.phid', $host_lease->getPHID());
 
     list($cache_lease, $source_url) = $this->tryAcquireWorkingCopyCache(
       $host_lease->getResource(),
+      $lease,
       $lease->getAttribute('resolved.repositoryURL'));
 
     $cmd = $this->getCommandInterfaceForLease($lease);
@@ -306,6 +309,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     $this->initializeGitSubmodules(
       $host_lease,
+      $lease,
       $host_lease->getAttribute('path'));
   }
 
@@ -321,13 +325,16 @@ final class DrydockWorkingCopyBlueprintImplementation
 
   private function tryAcquireWorkingCopyCache(
     DrydockResource $host_resource,
+    DrydockLease $owner_lease,
     $url) {
 
     $cache_lease = id(new DrydockLease())
       ->setResourceType('working-copy-cache')
+      ->setOwnerPHID($owner_lease->getPHID())
       ->setAttributes(
         array(
           'host.resource' => $host_resource->getID(),
+          'host.resource.phid' => $host_resource->getPHID(),
           'url' => $url,
         ))
       ->queueForActivation();
@@ -392,6 +399,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
   private function initializeGitSubmodules(
     DrydockLease $target_lease,
+    DrydockLease $owner_lease,
     $target_path = null) {
 
     $cmd = $this->getCommandInterfaceForLease($target_lease);
@@ -431,6 +439,7 @@ final class DrydockWorkingCopyBlueprintImplementation
     foreach ($submodules as $name => $url) {
       list($cache_lease, $source_url) = $this->tryAcquireWorkingCopyCache(
         $target_lease->getResource(),
+        $owner_lease,
         $url);
 
       $this->log(pht(
@@ -451,6 +460,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
       $this->initializeGitSubmodules(
         $target_lease,
+        $owner_lease,
         $target_path.'/'.$name);
 
       $this->log(pht(

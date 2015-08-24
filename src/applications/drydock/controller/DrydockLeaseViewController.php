@@ -147,9 +147,32 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
 
     $attributes = $lease->getAttributes();
     if ($attributes) {
+      $phids = array();
+      foreach ($attributes as $key => $value) {
+        if (strlen($key) > 5 && substr($key, -5) === '.phid' ||
+            strlen($key) > 4 && substr($key, -4) === 'PHID') {
+          $phids[] = $value;
+        }
+      }
+
+      $handles = id(new PhabricatorHandleQuery())
+        ->setViewer($this->getRequest()->getViewer())
+        ->withPHIDs($phids)
+        ->execute();
+
       $view->addSectionHeader(pht('Attributes'));
       foreach ($attributes as $key => $value) {
-        $view->addProperty($key, $value);
+        if (strlen($key) > 5 && substr($key, -5) === '.phid' ||
+            strlen($key) > 4 && substr($key, -4) === 'PHID') {
+          $handle = idx($handles, $value);
+          if ($handle !== null) {
+            $view->addProperty($key, $handle->renderLink());
+          } else {
+            $view->addProperty($key, phutil_tag('em', array(), $value));
+          }
+        } else {
+          $view->addProperty($key, $value);
+        }
       }
     }
 
