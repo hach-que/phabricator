@@ -10,6 +10,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
   private $activeResource;
   private $activeLease;
   private $instance;
+  private $scopes = array();
 
   abstract public function getType();
   abstract public function getInterface(
@@ -617,10 +618,11 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     DrydockResource $resource = null,
     DrydockLease $lease = null) {
 
-    if (($this->activeResource !== null) ||
-        ($this->activeLease !== null)) {
-      throw new Exception(pht('There is already an active resource or lease!'));
-    }
+    $scope = array(
+      'resource' => $resource,
+      'lease' => $lease,
+    );
+    array_push($this->scopes, $scope);
 
     $this->activeResource = $resource;
     $this->activeLease = $lease;
@@ -629,8 +631,20 @@ abstract class DrydockBlueprintImplementation extends Phobject {
   }
 
   public function popActiveScope() {
-    $this->activeResource = null;
-    $this->activeLease = null;
+    if (count($this->scopes) === 0) {
+      throw new Exception('Unable to pop active scope; no scopes active');
+    }
+
+    array_pop($this->scopes);
+
+    if (count($this->scopes) === 0) {
+      $this->activeResource = null;
+      $this->activeLease = null;
+    } else {
+      $current = last($this->scopes);
+      $this->activeResource = $current['resource'];
+      $this->activeLease = $current['lease'];
+    }
   }
 
 }
