@@ -242,79 +242,97 @@ final class DrydockWorkingCopyBlueprintImplementation
         ) + $host_attributes)
       ->queueForActivation();
 
-    $this->log(pht(
-      'Acquiring new host lease %d for working copy...',
-      $host_lease->getID()));
-    $lease->setAttribute('host.lease', $host_lease->getID());
-    $lease->setAttribute('host.lease.phid', $host_lease->getPHID());
+    try {
+      $this->log(pht(
+        'Acquiring new host lease %d for working copy...',
+        $host_lease->getID()));
+      $lease->setAttribute('host.lease', $host_lease->getID());
+      $lease->setAttribute('host.lease.phid', $host_lease->getPHID());
+    } catch (Exception $ex) {
+      $lease->reload();
+      $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+      $lease->setBrokenReason(pht(
+        'Forcibly broken by working copy blueprint.'));
+      $lease->save();
+    }
 
     $host_lease->waitUntilActive();
 
-    list($cache_lease, $source_url) = $this->tryAcquireWorkingCopyCache(
-      $host_lease->getResource(),
-      $lease,
-      $lease->getAttribute('resolved.repositoryURL'));
+    try {
+      list($cache_lease, $source_url) = $this->tryAcquireWorkingCopyCache(
+        $host_lease->getResource(),
+        $lease,
+        $lease->getAttribute('resolved.repositoryURL'));
 
-    $cmd = $this->getCommandInterfaceForLease($lease);
-    $cmd->setExecTimeout(3600);
+      try {
+        $cmd = $this->getCommandInterfaceForLease($lease);
+        $cmd->setExecTimeout(3600);
 
-    $this->log(pht(
-      'Cloning from "%s" to lease path "%s"',
-      $source_url,
-      $host_lease->getAttribute('path')));
-    $cmd->execx(
-      'git clone %s .',
-      $source_url);
-    $this->log(pht('Cloned from %s', $source_url));
-
-    $this->tryReleaseWorkingCopyCache($cache_lease);
-
-    if ($lease->getAttribute('resolved.target') === 'commit') {
-      $this->log(pht(
-        'Checking out target commit "%s"',
-        $lease->getAttribute('resolved.commitIdentifier')));
-      $cmd->execx(
-        'git checkout -f %s',
-        $lease->getAttribute('resolved.commitIdentifier'));
-      $this->log(pht('Checked out commit'));
-    } else if ($lease->getAttribute('resolved.target') === 'diff') {
-      $this->log(pht(
-        'Fetching diff tag from origin'));
-      $cmd->exec(
-        'git fetch origin +refs/tags/phabricator/diff/%d:'.
-        'refs/tags/phabricator/diff/%d',
-        $lease->getAttribute('resolved.diffID'),
-        $lease->getAttribute('resolved.diffID'));
-      $this->log(pht(
-        'Checking out target diff at tag "phabricator/diff/%d"',
-        $lease->getAttribute('resolved.diffID')));
-      $cmd->execx(
-        'git checkout -f phabricator/diff/%d',
-        $lease->getAttribute('resolved.diffID'));
-      $this->log(pht('Checked out diff'));
-    } else if ($lease->getAttribute('resolved.target') === 'url') {
-      if ($lease->getAttribute('resolved.repositoryReference') !== null) {
         $this->log(pht(
-          'Checking out target reference "%s"',
-          $lease->getAttribute('resolved.repositoryReference')));
+          'Cloning from "%s" to lease path "%s"',
+          $source_url,
+          $host_lease->getAttribute('path')));
+        $cmd->execx(
+          'git clone %s .',
+          $source_url);
+        $this->log(pht('Cloned from %s', $source_url));
+      } catch (Exception $ex) {
+        $this->tryReleaseWorkingCopyCache($cache_lease);
+        throw $ex;
+      }
+
+      $this->tryReleaseWorkingCopyCache($cache_lease);
+
+      if ($lease->getAttribute('resolved.target') === 'commit') {
+        $this->log(pht(
+          'Checking out target commit "%s"',
+          $lease->getAttribute('resolved.commitIdentifier')));
         $cmd->execx(
           'git checkout -f %s',
-          $lease->getAttribute('resolved.repositoryReference'));
-        $this->log(pht('Checked out reference'));
-      } else {
+          $lease->getAttribute('resolved.commitIdentifier'));
+        $this->log(pht('Checked out commit'));
+      } else if ($lease->getAttribute('resolved.target') === 'diff') {
         $this->log(pht(
-          'No target reference provided, leaving working directory as-is'));
+          'Fetching diff tag from origin'));
+        $cmd->exec(
+          'git fetch origin +refs/tags/phabricator/diff/%d:'.
+          'refs/tags/phabricator/diff/%d',
+          $lease->getAttribute('resolved.diffID'),
+          $lease->getAttribute('resolved.diffID'));
+        $this->log(pht(
+          'Checking out target diff at tag "phabricator/diff/%d"',
+          $lease->getAttribute('resolved.diffID')));
+        $cmd->execx(
+          'git checkout -f phabricator/diff/%d',
+          $lease->getAttribute('resolved.diffID'));
+        $this->log(pht('Checked out diff'));
+      } else if ($lease->getAttribute('resolved.target') === 'url') {
+        if ($lease->getAttribute('resolved.repositoryReference') !== null) {
+          $this->log(pht(
+            'Checking out target reference "%s"',
+            $lease->getAttribute('resolved.repositoryReference')));
+          $cmd->execx(
+            'git checkout -f %s',
+            $lease->getAttribute('resolved.repositoryReference'));
+          $this->log(pht('Checked out reference'));
+        } else {
+          $this->log(pht(
+            'No target reference provided, leaving working directory as-is'));
+        }
+      } else {
+        throw new Exception(pht(
+          'Target type %s not yet supported.',
+          $lease->getAttribute('resolved.target')));
       }
-    } else {
-      throw new Exception(pht(
-        'Target type %s not yet supported.',
-        $lease->getAttribute('resolved.target')));
-    }
 
-    $this->initializeGitSubmodules(
-      $host_lease,
-      $lease,
-      $host_lease->getAttribute('path'));
+      $this->initializeGitSubmodules(
+        $host_lease,
+        $lease,
+        $host_lease->getAttribute('path'));
+    } catch (Exception $ex) {
+      $host_lease->release();
+      throw $ex;
+    }
   }
 
   private function getCommandInterfaceForLease(DrydockLease $lease) {
@@ -446,30 +464,38 @@ final class DrydockWorkingCopyBlueprintImplementation
         $owner_lease,
         $url);
 
-      $this->log(pht(
-        'Updating local submodule URL to point to %s',
-        $source_url));
+      try {
+        $this->log(pht(
+          'Updating local submodule URL to point to %s',
+          $source_url));
 
-      $cmd->execx('git config --local submodule.%s.url %s', $name, $source_url);
+        $cmd->execx(
+          'git config --local submodule.%s.url %s',
+          $name,
+          $source_url);
 
-      $this->log(pht(
-        'Updating submodule %s',
-        $name));
+        $this->log(pht(
+          'Updating submodule %s',
+          $name));
 
-      $cmd->execx('git submodule update %s', $name);
+        $cmd->execx('git submodule update %s', $name);
 
-      $this->log(pht(
-        'Recursively initializing submodules for %s',
-        $name));
+        $this->log(pht(
+          'Recursively initializing submodules for %s',
+          $name));
 
-      $this->initializeGitSubmodules(
-        $target_lease,
-        $owner_lease,
-        $target_path.'/'.$name);
+        $this->initializeGitSubmodules(
+          $target_lease,
+          $owner_lease,
+          $target_path.'/'.$name);
 
-      $this->log(pht(
-        'Recursive submodule initialization complete for %s',
-        $name));
+        $this->log(pht(
+          'Recursive submodule initialization complete for %s',
+          $name));
+      } catch (Exception $ex) {
+        $this->tryReleaseWorkingCopyCache($cache_lease);
+        throw $ex;
+      }
 
       $this->tryReleaseWorkingCopyCache($cache_lease);
 

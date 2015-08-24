@@ -80,6 +80,7 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
     $host_lease = id(new DrydockLease())
       ->setResourceType('host')
       ->setIsTransientLease(1) // The cache should not hold the host open.
+      ->setOwnerPHID($lease->getPHID())
       ->setAttributes(
         array(
           'resourceID' => $host_resource_id,
@@ -90,32 +91,39 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
       $host_lease->getID(),
       $host_resource_id));
     $host_lease->waitUntilActive();
-    $this->log(pht(
-      'Lease %d acquired for working copy resource.',
-      $host_lease->getID()));
 
-    $resource
-      ->setAttribute('host.resource.phid', $host_lease->getResourcePHID())
-      ->setAttribute('host.lease', $host_lease->getID())
-      ->setAttribute('host.lease.phid', $host_lease->getPHID())
-      ->save();
+    try {
+      $this->log(pht(
+        'Lease %d acquired for working copy resource.',
+        $host_lease->getID()));
 
-    $this->log(pht(
-      'Cloning repository at "%s" to "%s"...',
-      $url,
-      $host_lease->getAttribute('path')));
+      $resource
+        ->setAttribute('host.resource.phid', $host_lease->getResourcePHID())
+        ->setAttribute('host.lease', $host_lease->getID())
+        ->setAttribute('host.lease.phid', $host_lease->getPHID())
+        ->save();
 
-    $cmd = $this->getCommandInterfaceForLease($host_lease);
-    $cmd->setExecTimeout(3600);
-    $cmd->execx(
-      'git clone --bare %s .',
-      $url);
+      $this->log(pht(
+        'Cloning repository at "%s" to "%s"...',
+        $url,
+        $host_lease->getAttribute('path')));
 
-    $this->log('Cloned repository cache.');
+      $cmd = $this->getCommandInterfaceForLease($host_lease);
+      $cmd->setExecTimeout(3600);
+      $cmd->execx(
+        'git clone --bare %s .',
+        $url);
 
-    $resource
-      ->setStatus(DrydockResourceStatus::STATUS_OPEN)
-      ->save();
+      $this->log('Cloned repository cache.');
+
+      $resource
+        ->setStatus(DrydockResourceStatus::STATUS_OPEN)
+        ->save();
+    } catch (Exception $ex) {
+      $host_lease->release();
+      throw $ex;
+    }
+
     return $resource;
   }
 
