@@ -171,10 +171,13 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
 
     $viewer = $request->getUser();
 
+    $appname = PhabricatorAuthController::getStaticAccountApplicationName(
+      $request);
+
     $dialog = id(new AphrontDialogView())
       ->setSubmitURI($this->getLoginURI())
       ->setUser($viewer)
-      ->setTitle(pht('Login to Phabricator'))
+      ->setTitle(pht('Login to %s', $appname))
       ->addSubmitButton(pht('Login'));
 
     if ($this->shouldAllowRegistration()) {

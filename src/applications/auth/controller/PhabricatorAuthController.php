@@ -2,6 +2,44 @@
 
 abstract class PhabricatorAuthController extends PhabricatorController {
 
+  public function buildStandardPageView() {
+    $class_name = $this->getRequest()->getStr('__pageview');
+    $symbols = id(new PhutilSymbolLoader())
+      ->setType('class')
+      ->setConcreteOnly(true)
+      ->setAncestorClass('AphrontPageView')
+      ->selectAndLoadSymbols();
+
+    $view = null;
+    foreach ($symbols as $key => $value) {
+      if ($value["name"] == $class_name) {
+        $view = new $class_name();
+      }
+    }
+
+    if ($view == null) {
+      $view = new PhabricatorStandardPageView();
+    }
+
+    $view->setRequest($this->getRequest());
+    $view->setController($this);
+    return $view;
+  }
+
+  public static function getStaticAccountApplicationName(
+    AphrontRequest $request) {
+
+    $application_name = $request->getStr('__appname');
+    if ($application_name === null) {
+      $application_name = pht('Phabricator');
+    }
+    return $application_name;
+  }
+
+  public function getAccountApplicationName() {
+    return self::getStaticAccountApplicationName($this->getRequest());
+  }
+
   public function buildStandardPageResponse($view, array $data) {
     $page = $this->buildStandardPageView();
 
