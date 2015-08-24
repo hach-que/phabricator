@@ -34,6 +34,16 @@ final class DrydockPreallocatedHostBlueprintImplementation
   protected function canAllocateLease(
     DrydockResource $resource,
     DrydockLease $lease) {
+
+    $attributes = $lease->getAttributes();
+    foreach ($attributes as $key => $value) {
+      if (strlen($key) > 5 && substr($key, 0, 5) === 'attr_') {
+        if ($value !== $resource->getAttribute($key)) {
+          return false;
+        }
+      }
+    } 
+
     return
       $lease->getAttribute('platform') ===
         $resource->getAttribute('platform') ||
