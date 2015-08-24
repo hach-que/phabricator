@@ -188,6 +188,7 @@ final class HarbormasterRunBuildPlanBuildImplementation
       switch ($target_build->getBuildStatus()) {
         case HarbormasterBuild::STATUS_FAILED:
         case HarbormasterBuild::STATUS_ERROR:
+        case HarbormasterBuild::STATUS_ABORTED:
           throw new HarbormasterBuildFailureException();
       }
 
