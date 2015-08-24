@@ -64,7 +64,8 @@ final class PhragmentFileController extends PhragmentController {
       ->withPHIDs(array($version->getFilePHID()))
       ->executeOne();
     return id(new AphrontRedirectResponse())
-      ->setURI($file->getDownloadURI($return));
+      ->setURI($file->getDownloadURI($return))
+      ->setIsExternal(true);
   }
 
 }
