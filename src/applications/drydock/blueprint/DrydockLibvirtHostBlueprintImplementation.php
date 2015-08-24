@@ -432,6 +432,16 @@ EOF;
 
       if (!$has_ip_assigned) {
         sleep(10);
+        
+        $future = $this->getSSHFuture(
+          $loaded_credential,
+          '/usr/bin/virsh domstate %s',
+          $resource->getAttribute('vm-name'));
+        list($stdout, $stderr) = $future->resolvex();
+        $status = trim($stdout).trim($stderr);
+        if (substr_count($status, 'shut off') > 0 || substr_count($status, 'Domain not found') > 0) {
+          throw new Exception('Virtual machine no longer exists or is shut down');
+        }
       }
     }
 
