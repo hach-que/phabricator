@@ -14,6 +14,9 @@ final class DrydockLogSearchEngine extends PhabricatorApplicationSearchEngine {
     $query = new PhabricatorSavedQuery();
 
     $query->setParameter(
+      'blueprintPHIDs',
+      $this->readListFromRequest($request, 'blueprints'));
+    $query->setParameter(
       'resourcePHIDs',
       $this->readListFromRequest($request, 'resources'));
     $query->setParameter(
@@ -24,6 +27,7 @@ final class DrydockLogSearchEngine extends PhabricatorApplicationSearchEngine {
   }
 
   public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
+    $blueprint_phids = $saved->getParameter('blueprintPHIDs', array());
     $resource_phids = $saved->getParameter('resourcePHIDs', array());
     $lease_phids = $saved->getParameter('leasePHIDs', array());
 
@@ -48,6 +52,9 @@ final class DrydockLogSearchEngine extends PhabricatorApplicationSearchEngine {
     }
 
     $query = new DrydockLogQuery();
+    if ($blueprint_phids) {
+      $query->withBlueprintPHIDs($blueprint_phids);
+    }
     if ($resource_ids) {
       $query->withResourceIDs($resource_ids);
     }
@@ -63,6 +70,12 @@ final class DrydockLogSearchEngine extends PhabricatorApplicationSearchEngine {
     PhabricatorSavedQuery $saved) {
 
     $form
+      ->appendControl(
+        id(new AphrontFormTokenizerControl())
+          ->setDatasource(new DrydockBlueprintDatasource())
+          ->setName('blueprints')
+          ->setLabel(pht('Blueprints'))
+          ->setValue($saved->getParameter('blueprintPHIDs', array())))
       ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setDatasource(new DrydockResourceDatasource())

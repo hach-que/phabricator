@@ -3,11 +3,13 @@
 final class DrydockLog extends DrydockDAO
   implements PhabricatorPolicyInterface {
 
+  protected $blueprintPHID;
   protected $resourceID;
   protected $leaseID;
   protected $epoch;
   protected $message;
 
+  private $blueprint = self::ATTACHABLE;
   private $resource = self::ATTACHABLE;
   private $lease = self::ATTACHABLE;
 
@@ -18,6 +20,7 @@ final class DrydockLog extends DrydockDAO
         'resourceID' => 'id?',
         'leaseID' => 'id?',
         'message' => 'text',
+        'blueprintPHID' => 'phid?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'resourceID' => array(
@@ -31,6 +34,15 @@ final class DrydockLog extends DrydockDAO
         ),
       ),
     ) + parent::getConfiguration();
+  }
+
+  public function attachBlueprint(DrydockBlueprint $blueprint = null) {
+    $this->blueprint = $blueprint;
+    return $this;
+  }
+
+  public function getBlueprint() {
+    return $this->assertAttached($this->blueprint);
   }
 
   public function attachResource(DrydockResource $resource = null) {

@@ -2,8 +2,14 @@
 
 final class DrydockLogQuery extends DrydockQuery {
 
+  private $blueprintPHIDs;
   private $resourceIDs;
   private $leaseIDs;
+
+  public function withBlueprintPHIDs(array $phids) {
+    $this->blueprintPHIDs = $phids;
+    return $this;
+  }
 
   public function withResourceIDs(array $ids) {
     $this->resourceIDs = $ids;
@@ -31,6 +37,30 @@ final class DrydockLogQuery extends DrydockQuery {
   }
 
   protected function willFilterPage(array $logs) {
+    $blueprint_phids = array_filter(mpull($logs, 'getBlueprintPHID'));
+    if ($blueprint_phids) {
+      $blueprints = id(new DrydockBlueprintQuery())
+        ->setParentQuery($this)
+        ->setViewer($this->getViewer())
+        ->withPHIDs($blueprint_phids)
+        ->execute();
+      $blueprints = mpull($blueprints, null, 'getPHID');
+    } else {
+      $blueprints = array();
+    }
+
+    foreach ($logs as $key => $log) {
+      $blueprint = null;
+      if ($log->getBlueprintPHID()) {
+        $blueprint = idx($blueprints, $log->getBlueprintPHID());
+        if (!$blueprint) {
+          unset($logs[$key]);
+          continue;
+        }
+      }
+      $log->attachBlueprint($blueprint);
+    }
+
     $resource_ids = array_filter(mpull($logs, 'getResourceID'));
     if ($resource_ids) {
       $resources = id(new DrydockResourceQuery())
@@ -47,7 +77,7 @@ final class DrydockLogQuery extends DrydockQuery {
       if ($log->getResourceID()) {
         $resource = idx($resources, $log->getResourceID());
         if (!$resource) {
-          unset($logs[$key]);
+          $log->attachResource(null);
           continue;
         }
       }
@@ -70,19 +100,11 @@ final class DrydockLogQuery extends DrydockQuery {
       if ($log->getLeaseID()) {
         $lease = idx($leases, $log->getLeaseID());
         if (!$lease) {
-          unset($logs[$key]);
+          $log->attachLease(null);
           continue;
         }
       }
       $log->attachLease($lease);
-    }
-
-    // These logs are meaningless and their policies aren't computable. They
-    // shouldn't exist, but throw them away if they do.
-    foreach ($logs as $key => $log) {
-      if (!$log->getResource() && !$log->getLease()) {
-        unset($logs[$key]);
-      }
     }
 
     return $logs;
@@ -90,6 +112,13 @@ final class DrydockLogQuery extends DrydockQuery {
 
   protected function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
+
+    if ($this->blueprintPHIDs !== null) {
+      $where[] = qsprintf(
+        $conn_r,
+        'blueprintPHID IN (%Ls)',
+        $this->blueprintPHIDs);
+    }
 
     if ($this->resourceIDs !== null) {
       $where[] = qsprintf(

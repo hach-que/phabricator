@@ -33,6 +33,7 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
   private function logToDrydock($message) {
     DrydockBlueprintImplementation::writeLog(
       null,
+      null,
       $this->loadLease(),
       $message);
   }

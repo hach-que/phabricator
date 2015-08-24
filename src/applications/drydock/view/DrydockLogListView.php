@@ -18,27 +18,47 @@ final class DrydockLogListView extends AphrontView {
 
     $rows = array();
     foreach ($logs as $log) {
-      $resource_uri = '/drydock/resource/'.$log->getResourceID().'/';
-      $lease_uri = '/drydock/lease/'.$log->getLeaseID().'/';
-
-      $resource_name = $log->getResourceID();
-      if ($log->getResourceID() !== null) {
-        $resource_name = $log->getResource()->getName();
+      if ($log->getBlueprintPHID() !== null) {
+        $blueprint_id = $log->getBlueprint()->getID();
+        $blueprint_uri = '/drydock/blueprint/'.$blueprint_id.'/';
+        $blueprint_tag = phutil_tag(
+          'a',
+          array(
+            'href' => $blueprint_uri,
+          ),
+          $log->getBlueprint()->getBlueprintName());
+      } else {
+        $blueprint_tag = '';
       }
 
-      $rows[] = array(
-        phutil_tag(
+      if ($log->getResource()) {
+        $resource_uri = '/drydock/resource/'.$log->getResourceID().'/';
+        $resource_tag = phutil_tag(
           'a',
           array(
             'href' => $resource_uri,
           ),
-          $resource_name),
-        phutil_tag(
+          $log->getResource()->getName());
+      } else {
+        $resource_tag = $log->getResourceID();
+      }
+
+      if ($log->getLease()) {
+        $lease_uri = '/drydock/lease/'.$log->getLeaseID().'/';
+        $lease_tag = phutil_tag(
           'a',
           array(
             'href' => $lease_uri,
           ),
-          $log->getLeaseID()),
+          $log->getLeaseID());
+      } else {
+        $lease_tag = $log->getLeaseID();
+      }
+
+      $rows[] = array(
+        $blueprint_tag,
+        $resource_tag,
+        $lease_tag,
         $log->getMessage(),
         phabricator_datetime($log->getEpoch(), $viewer),
       );
@@ -48,6 +68,7 @@ final class DrydockLogListView extends AphrontView {
     $table->setDeviceReadyTable(true);
     $table->setHeaders(
       array(
+        pht('Blueprint'),
         pht('Resource'),
         pht('Lease'),
         pht('Message'),
@@ -55,6 +76,7 @@ final class DrydockLogListView extends AphrontView {
       ));
     $table->setShortHeaders(
       array(
+        pht('B'),
         pht('R'),
         pht('L'),
         pht('Message'),
@@ -62,6 +84,7 @@ final class DrydockLogListView extends AphrontView {
       ));
     $table->setColumnClasses(
       array(
+        '',
         '',
         '',
         'wide',

@@ -494,6 +494,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
    */
   protected function log($message) {
     self::writeLog(
+      $this->instance,
       $this->activeResource,
       $this->activeLease,
       $message);
@@ -504,6 +505,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
    * @task log
    */
   public static function writeLog(
+    DrydockBlueprint $blueprint = null,
     DrydockResource $resource = null,
     DrydockLease $lease = null,
     $message = null) {
@@ -511,6 +513,10 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     $log = id(new DrydockLog())
       ->setEpoch(time())
       ->setMessage($message);
+
+    if ($blueprint) {
+      $log->setBlueprintPHID($blueprint->getPHID());
+    }
 
     if ($resource) {
       $log->setResourceID($resource->getID());
