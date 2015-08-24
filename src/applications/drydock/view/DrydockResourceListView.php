@@ -26,6 +26,7 @@ final class DrydockResourceListView extends AphrontView {
       $item->addAttribute($status);
 
       switch ($resource->getStatus()) {
+        case DrydockResourceStatus::STATUS_ALLOCATING:
         case DrydockResourceStatus::STATUS_PENDING:
           $item->setStatusIcon('fa-dot-circle-o yellow');
           break;

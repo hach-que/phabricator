@@ -19,6 +19,10 @@ abstract class DrydockBlueprintImplementation extends Phobject {
 
   abstract public function isEnabled();
 
+  public function isTest() {
+    return false;
+  }
+
   abstract public function getBlueprintName();
   abstract public function getDescription();
 
@@ -42,7 +46,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     return $lease;
   }
 
-  protected function getInstance() {
+  public function getInstance() {
     if (!$this->instance) {
       throw new Exception(
         pht('Attach the blueprint instance to the implementation.'));
@@ -127,6 +131,11 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     $allocated = false;
     $allocation_exception = null;
 
+    $context = new DrydockAllocationContext(
+      $this->getInstance(),
+      $resource,
+      $lease);
+
     $resource->openTransaction();
       $resource->beginReadLocking();
         $resource->reload();
@@ -142,9 +151,9 @@ abstract class DrydockBlueprintImplementation extends Phobject {
 
         try {
           $allocated = $this->shouldAllocateLease(
+            $context,
             $resource,
-            $ephemeral_lease,
-            $other_leases);
+            $ephemeral_lease);
         } catch (Exception $ex) {
           $allocation_exception = $ex;
         }
@@ -197,19 +206,15 @@ abstract class DrydockBlueprintImplementation extends Phobject {
    * better implemented in @{method:canAllocateLease}, which serves as a
    * cheap filter before lock acquisition.
    *
+   * @param   DrydockAllocationContext Relevant contextual information.
    * @param   DrydockResource     Candidate resource to allocate the lease on.
    * @param   DrydockLease        Pending lease that wants to allocate here.
-   * @param   list<DrydockLease>  Other allocated and acquired leases on the
-   *                              resource. The implementation can inspect them
-   *                              to verify it can safely add the new lease.
-   * @return  bool                True to allocate the lease on the resource;
-   *                              false to reject it.
    * @task lease
    */
   abstract protected function shouldAllocateLease(
+    DrydockAllocationContext $context,
     DrydockResource $resource,
-    DrydockLease $lease,
-    array $other_leases);
+    DrydockLease $lease);
 
 
   /**
@@ -265,10 +270,25 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     DrydockLease $lease);
 
 
+  /**
+   * Release an allocated lease, performing any desired cleanup.
+   *
+   * After this method executes, the lease status is moved to `RELEASED`.
+   *
+   * If release fails, throw an exception.
+   *
+   * @param   DrydockResource   Resource to release the lease from.
+   * @param   DrydockLease      Lease to release.
+   * @return  void
+   */
+  abstract protected function executeReleaseLease(
+    DrydockResource $resource,
+    DrydockLease $lease);
 
   final public function releaseLease(
     DrydockResource $resource,
-    DrydockLease $lease) {
+    DrydockLease $lease,
+    $caused_by_closing_resource = false) {
     $scope = $this->pushActiveScope(null, $lease);
 
     $released = false;
@@ -286,10 +306,36 @@ abstract class DrydockBlueprintImplementation extends Phobject {
       $lease->endReadLocking();
     $lease->saveTransaction();
 
+    // Execute clean up outside of the lock and don't perform clean up if the
+    // resource is closing anyway, because in that scenario, the closing
+    // resource will clean up all the leases anyway (e.g. an EC2 host being
+    // terminated that contains leases on it's instance storage).
+    if ($released && !$caused_by_closing_resource) {
+      $this->executeReleaseLease($resource, $lease);
+    }
+
     if (!$released) {
       throw new Exception(pht('Unable to release lease: lease not active!'));
     }
 
+    if (!$caused_by_closing_resource) {
+      // Check to see if the resource has no more leases, and if so, ask the
+      // blueprint as to whether this resource should be closed.
+      $context = new DrydockAllocationContext(
+        $this->getInstance(),
+        $resource,
+        $lease);
+
+      if ($context->getCurrentResourceLeaseCount() === 0) {
+        if ($this->shouldCloseUnleasedResource($context, $resource)) {
+          self::writeLog(
+            $resource,
+            null,
+            pht('Closing resource because it has no more active leases'));
+          $this->closeResource($resource);
+        }
+      }
+    }
   }
 
 
@@ -301,10 +347,106 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     return true;
   }
 
-  abstract protected function executeAllocateResource(DrydockLease $lease);
+  public function canAllocateResourceForLease(DrydockLease $lease) {
+    return true;
+  }
 
+  abstract protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease);
 
-  final public function allocateResource(DrydockLease $lease) {
+  abstract protected function executeAllocateResource(
+    DrydockResource $resource,
+    DrydockLease $lease);
+
+  /**
+   * Closes a previously allocated resource, performing any desired
+   * cleanup.
+   *
+   * After this method executes, the release status is moved to `CLOSED`.
+   *
+   * If release fails, throw an exception.
+   *
+   * @param   DrydockResource   Resource to close.
+   * @return  void
+   */
+  abstract protected function executeCloseResource(
+    DrydockResource $resource);
+
+  /**
+   * Return whether or not a resource that now has no leases on it
+   * should be automatically closed.
+   *
+   * @param DrydockAllocationContext Relevant contextual information.
+   * @param DrydockResource       The resource that has no more leases on it.
+   * @return bool
+   */
+  abstract protected function shouldCloseUnleasedResource(
+    DrydockAllocationContext $context,
+    DrydockResource $resource);
+
+  final public function closeResource(DrydockResource $resource) {
+    $resource->openTransaction();
+      $resource->setStatus(DrydockResourceStatus::STATUS_CLOSING);
+      $resource->save();
+
+      $statuses = array(
+        DrydockLeaseStatus::STATUS_PENDING,
+        DrydockLeaseStatus::STATUS_ACTIVE,
+      );
+
+      $leases = id(new DrydockLeaseQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withResourceIDs(array($resource->getID()))
+        ->withStatuses($statuses)
+        ->execute();
+
+      foreach ($leases as $lease) {
+        switch ($lease->getStatus()) {
+          case DrydockLeaseStatus::STATUS_PENDING:
+            $message = pht('Breaking pending lease (resource closing).');
+            $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+            break;
+          case DrydockLeaseStatus::STATUS_ACTIVE:
+            $message = pht('Releasing active lease (resource closing).');
+            $this->releaseLease($resource, $lease, true);
+            $lease->setStatus(DrydockLeaseStatus::STATUS_RELEASED);
+            break;
+        }
+        self::writeLog($resource, $lease, $message);
+        $lease->save();
+      }
+
+      $this->executeCloseResource($resource);
+
+      $resource->setStatus(DrydockResourceStatus::STATUS_CLOSED);
+      $resource->save();
+    $resource->saveTransaction();
+  }
+
+  final public function initializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
+    $scope = $this->pushActiveScope($resource, $lease);
+
+    $this->log(pht(
+      'Blueprint \'%s\': Initializing Resource for \'%s\'',
+      $this->getBlueprintClass(),
+      $lease->getLeaseName()));
+
+    try {
+      $this->executeInitializePendingResource($resource, $lease);
+    } catch (Exception $ex) {
+      $this->logException($ex);
+      throw $ex;
+    }
+  }
+
+  final public function allocateResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
     $scope = $this->pushActiveScope(null, $lease);
 
     $this->log(
@@ -314,7 +456,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
         $lease->getLeaseName()));
 
     try {
-      $resource = $this->executeAllocateResource($lease);
+      $this->executeAllocateResource($resource, $lease);
       $this->validateAllocatedResource($resource);
     } catch (Exception $ex) {
       $this->logException($ex);
@@ -389,25 +531,6 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     return idx(self::getAllBlueprintImplementations(), $class);
   }
 
-  protected function newResourceTemplate($name) {
-    $resource = id(new DrydockResource())
-      ->setBlueprintPHID($this->getInstance()->getPHID())
-      ->setBlueprintClass($this->getBlueprintClass())
-      ->setType($this->getType())
-      ->setStatus(DrydockResourceStatus::STATUS_PENDING)
-      ->setName($name)
-      ->save();
-
-    $this->activeResource = $resource;
-
-    $this->log(
-      pht(
-        "Blueprint '%s': Created New Template",
-        $this->getBlueprintClass()));
-
-    return $resource;
-  }
-
   /**
    * Sanity checks that the blueprint is implemented properly.
    */
@@ -441,7 +564,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     }
   }
 
-  private function pushActiveScope(
+  public function pushActiveScope(
     DrydockResource $resource = null,
     DrydockLease $lease = null) {
 

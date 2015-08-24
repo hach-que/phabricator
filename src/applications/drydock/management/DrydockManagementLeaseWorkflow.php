@@ -19,6 +19,10 @@ final class DrydockManagementLeaseWorkflow
             'param'     => 'name=value,...',
             'help'      => pht('Resource specficiation.'),
           ),
+          array(
+            'name'      => 'in-process',
+            'help'      => pht('Acquire lease in-process.'),
+          ),
         ));
   }
 
@@ -40,7 +44,9 @@ final class DrydockManagementLeaseWorkflow
       $attributes = $options->parse($attributes);
     }
 
-    PhabricatorWorker::setRunAllTasksInProcess(true);
+    if ($args->getArg('in-process')) {
+      PhabricatorWorker::setRunAllTasksInProcess(true);
+    }
 
     $lease = id(new DrydockLease())
       ->setResourceType($resource_type);
@@ -48,8 +54,18 @@ final class DrydockManagementLeaseWorkflow
       $lease->setAttributes($attributes);
     }
     $lease
-      ->queueForActivation()
-      ->waitUntilActive();
+      ->queueForActivation();
+
+    while (true) {
+      try {
+        $lease->waitUntilActive();
+        break;
+      } catch (PhabricatorWorkerYieldException $ex) {
+        $console->writeOut(
+          "%s\n",
+          pht('Task yielded while acquiring %s...', $lease->getID()));
+      }
+    }
 
     $console->writeOut("%s\n", pht('Acquired Lease %s', $lease->getID()));
     return 0;

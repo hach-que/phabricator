@@ -34,6 +34,11 @@ final class DrydockBlueprintCreateController
       ->setError($e_blueprint);
 
     foreach ($implementations as $implementation_name => $implementation) {
+      if ($implementation->isTest()) {
+        // Never show testing blueprints in the interface.
+        continue;
+      }
+
       $disabled = !$implementation->isEnabled();
 
       $control->addButton(

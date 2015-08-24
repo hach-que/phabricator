@@ -21,29 +21,49 @@ final class HarbormasterLeaseHostBuildStepImplementation
 
     $settings = $this->getSettings();
 
-    // Create the lease.
-    $lease = id(new DrydockLease())
-      ->setResourceType('host')
-      ->setOwnerPHID($build_target->getPHID())
-      ->setAttributes(
+    // This build step is reentrant, because waitUntilActive may
+    // throw PhabricatorWorkerYieldException.  Check to see if there
+    // is already a lease on the build target, and if so, wait until
+    // that lease is active instead of creating a new one.
+    $artifacts = id(new HarbormasterBuildArtifactQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withBuildTargetPHIDs(array($build_target->getPHID()))
+      ->execute();
+    $artifact = count($artifacts) > 0 ? head($artifacts) : null;
+
+    if ($artifact === null) {
+      // Create the lease.
+      $lease = id(new DrydockLease())
+        ->setResourceType('host')
+        ->setOwnerPHID($build_target->getPHID())
+        ->setAttributes(
+          array(
+            'platform' => $settings['platform'],
+          ))
+        ->queueForActivation();
+
+      // Create the associated artifact.
+      $artifact = $build_target->createArtifact(
+        PhabricatorUser::getOmnipotentUser(),
+        $settings['name'],
+        HarbormasterHostArtifact::ARTIFACTCONST,
         array(
-          'platform' => $settings['platform'],
-        ))
-      ->queueForActivation();
+          'drydockLeasePHID' => $lease->getPHID(),
+        ));
+    } else {
+      // Load the lease.
+      $impl = $artifact->getArtifactImplementation();
+      $lease = $impl->loadArtifactLease(PhabricatorUser::getOmnipotentUser());
+    }
 
     // Wait until the lease is fulfilled.
-    // TODO: This will throw an exception if the lease can't be fulfilled;
-    // we should treat that as build failure not build error.
-    $lease->waitUntilActive();
-
-    // Create the associated artifact.
-    $artifact = $build_target->createArtifact(
-      PhabricatorUser::getOmnipotentUser(),
-      $settings['name'],
-      HarbormasterHostArtifact::ARTIFACTCONST,
-      array(
-        'drydockLeasePHID' => $lease->getPHID(),
-      ));
+    try {
+      $lease->waitUntilActive();
+    } catch (PhabricatorWorkerYieldException $ex) {
+      throw $ex;
+    } catch (Exception $ex) {
+      throw new HarbormasterBuildFailureException($ex->getMessage());
+    }
   }
 
   public function getArtifactOutputs() {

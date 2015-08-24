@@ -75,36 +75,8 @@ final class DrydockResource extends DrydockDAO
   }
 
   public function closeResource() {
-    $this->openTransaction();
-      $statuses = array(
-        DrydockLeaseStatus::STATUS_PENDING,
-        DrydockLeaseStatus::STATUS_ACTIVE,
-      );
-
-      $leases = id(new DrydockLeaseQuery())
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
-        ->withResourceIDs(array($this->getID()))
-        ->withStatuses($statuses)
-        ->execute();
-
-      foreach ($leases as $lease) {
-        switch ($lease->getStatus()) {
-          case DrydockLeaseStatus::STATUS_PENDING:
-            $message = pht('Breaking pending lease (resource closing).');
-            $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
-            break;
-          case DrydockLeaseStatus::STATUS_ACTIVE:
-            $message = pht('Releasing active lease (resource closing).');
-            $lease->setStatus(DrydockLeaseStatus::STATUS_RELEASED);
-            break;
-        }
-        DrydockBlueprintImplementation::writeLog($this, $lease, $message);
-        $lease->save();
-      }
-
-      $this->setStatus(DrydockResourceStatus::STATUS_CLOSED);
-      $this->save();
-    $this->saveTransaction();
+    $blueprint = $this->getBlueprint();
+    $blueprint->closeResource($this);
   }
 
 

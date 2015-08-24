@@ -19,7 +19,14 @@ final class DrydockPreallocatedHostBlueprintImplementation
     return false;
   }
 
-  protected function executeAllocateResource(DrydockLease $lease) {
+  protected function executeInitializePendingResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {}
+
+  protected function executeAllocateResource(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
     throw new Exception(
       pht("Preallocated hosts can't be dynamically allocated."));
   }
@@ -32,9 +39,9 @@ final class DrydockPreallocatedHostBlueprintImplementation
   }
 
   protected function shouldAllocateLease(
+    DrydockAllocationContext $context,
     DrydockResource $resource,
-    DrydockLease $lease,
-    array $other_leases) {
+    DrydockLease $lease) {
     return true;
   }
 
@@ -112,5 +119,21 @@ final class DrydockPreallocatedHostBlueprintImplementation
 
     throw new Exception(pht("No interface of type '%s'.", $type));
   }
+
+  protected function executeReleaseLease(
+    DrydockResource $resource,
+    DrydockLease $lease) {
+
+    // TODO: Remove leased directory
+  }
+
+  protected function shouldCloseUnleasedResource(
+    DrydockAllocationContext $context,
+    DrydockResource $resource) {
+
+    return false;
+  }
+
+  protected function executeCloseResource(DrydockResource $resource) {}
 
 }
