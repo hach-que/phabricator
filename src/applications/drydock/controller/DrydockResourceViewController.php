@@ -110,10 +110,9 @@ final class DrydockResourceViewController extends DrydockResourceController {
       pht('Resource Type'),
       $resource->getType());
 
-    // TODO: Load handle.
     $view->addProperty(
       pht('Blueprint'),
-      $resource->getBlueprintPHID());
+      $this->getViewer()->renderHandle($resource->getBlueprintPHID()));
 
     $attributes = $resource->getAttributes();
     if ($attributes) {
