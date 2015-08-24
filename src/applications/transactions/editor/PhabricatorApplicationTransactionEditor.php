@@ -1976,6 +1976,9 @@ abstract class PhabricatorApplicationTransactionEditor
     $transaction_type,
     $capability) {
 
+    // Disabled so that system agents can create tasks they can't access.
+    return array();
+
     $actor = $this->requireActor();
     $errors = array();
     // Note $this->xactions is necessary; $xactions is $this->xactions of
