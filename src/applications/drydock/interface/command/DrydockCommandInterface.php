@@ -4,6 +4,9 @@ abstract class DrydockCommandInterface extends DrydockInterface {
 
   private $workingDirectory;
   private $escapingMode;
+  private $sshProxyHost;
+  private $sshProxyPort;
+  private $sshProxyCredential;
 
   public function __construct() {
     $this->escapingMode = PhutilCommandString::MODE_DEFAULT;
@@ -25,6 +28,35 @@ abstract class DrydockCommandInterface extends DrydockInterface {
 
   public function getEscapingMode() {
     return $this->escapingMode;
+  }
+
+  public function setSSHProxy($host, $port, $credential) {
+    $this->sshProxyHost = $host;
+    $this->sshProxyPort = $port;
+    $this->sshProxyCredential = $credential;
+    return $this;
+  }
+
+  public function getSSHProxyCommand() {
+    if ($this->sshProxyHost === null) {
+      return '';
+    }
+
+    return csprintf(
+      'ssh '.
+      '-o LogLevel=quiet '.
+      '-o StrictHostKeyChecking=no '.
+      '-o UserKnownHostsFile=/dev/null '.
+      '-o BatchMode=yes '.
+      '-p %s -i %P %P@%s --',
+      $this->sshProxyPort,
+      $this->sshProxyCredential->getKeyfileEnvelope(),
+      $this->sshProxyCredential->getUsernameEnvelope(),
+      $this->sshProxyHost);
+  }
+
+  public function isSSHProxied() {
+    return $this->sshProxyHost !== null;
   }
 
   final public function getInterfaceType() {

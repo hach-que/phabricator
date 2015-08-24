@@ -5,6 +5,7 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
   private $passphraseSSHKey;
   private $connectTimeout;
   private $execTimeout;
+  private $remoteKeyFile;
 
   private function openCredentialsIfNotOpen() {
     if ($this->passphraseSSHKey !== null) {
@@ -58,7 +59,31 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
         'ConnectTimeout='.$this->connectTimeout);
     }
 
-    $future = new ExecFuture(
+    $key = $this->passphraseSSHKey->getKeyfileEnvelope();
+    if ($this->isSSHProxied()) {
+      if ($this->remoteKeyFile === null) {
+        $temp_name = '/tmp/'.Filesystem::readRandomCharacters(20).'.proxy';
+        $key_future = new ExecFuture(
+          'cat %P | %C %s',
+          $key,
+          $this->getSSHProxyCommand(),
+          csprintf(
+            'touch %s && chmod 0600 %s && cat - >%s',
+            $temp_name,
+            $temp_name,
+            $temp_name));
+        $key_future->resolvex();
+        $this->remoteKeyFile = new RemoteTempFile(
+          $temp_name,
+          new ExecFuture(
+            '%C %s',
+            $this->getSSHProxyCommand(),
+            csprintf('rm %s', $temp_name)));
+      }
+      $key = new PhutilOpaqueEnvelope((string)$this->remoteKeyFile);
+    }
+
+    $escaped_command = csprintf(
       'ssh '.
       '-o LogLevel=quiet '.
       '-o StrictHostKeyChecking=no '.
@@ -67,10 +92,23 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       '%C -p %s -i %P %P@%s -- %s',
       $command_timeout,
       $this->getConfig('port'),
-      $this->passphraseSSHKey->getKeyfileEnvelope(),
+      $key,
       $this->passphraseSSHKey->getUsernameEnvelope(),
       $this->getConfig('host'),
       $full_command);
+
+    $proxy_cmd = $this->getSSHProxyCommand();
+    if ($proxy_cmd !== '') {
+      $future = new ExecFuture(
+        '%C %s',
+        $proxy_cmd,
+        $escaped_command);
+    } else {
+      $future = new ExecFuture(
+        '%C',
+        $escaped_command);
+    }
+
     $future->setTimeout($this->execTimeout);
     return $future;
   }

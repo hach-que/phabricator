@@ -18,7 +18,8 @@ final class DrydockLogListView extends AphrontView {
 
     $rows = array();
     foreach ($logs as $log) {
-      if ($log->getBlueprintPHID() !== null) {
+      if ($log->getBlueprintPHID() !== null &&
+          $log->getBlueprint() !== null) {
         $blueprint_id = $log->getBlueprint()->getID();
         $blueprint_uri = '/drydock/blueprint/'.$blueprint_id.'/';
         $blueprint_tag = phutil_tag(

@@ -4,6 +4,7 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
 
   private $passphraseWinRMPassword;
   private $connectTimeout;
+  private $execTimeout;
 
   private function openCredentialsIfNotOpen() {
     if ($this->passphraseWinRMPassword !== null) {
@@ -24,6 +25,11 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
     $this->passphraseWinRMPassword = PassphrasePasswordKey::loadFromPHID(
       $credential->getPHID(),
       PhabricatorUser::getOmnipotentUser());
+  }
+
+  public function setExecTimeout($timeout) {
+    $this->execTimeout = $timeout;
+    return $this;
   }
 
   public function getExecFuture($command) {
@@ -79,7 +85,7 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
           $this->getShell()));
     }
 
-    return new ExecFuture(
+    $escaped_command = csprintf(
       'winrm '.
       '-hostname=%s '.
       '-username=%P '.
@@ -91,5 +97,19 @@ final class DrydockWinRMCommandInterface extends DrydockCommandInterface {
       $this->passphraseWinRMPassword->getPasswordEnvelope(),
       $this->getConfig('port'),
       $change_directory.$command);
+
+    $proxy_cmd = $this->getSSHProxyCommand();
+    if ($proxy_cmd !== '') {
+      $future = new ExecFuture(
+        '%C %s',
+        $proxy_cmd,
+        $escaped_command);
+    } else {
+      $future = new ExecFuture(
+        '%C',
+        $escaped_command);
+    }
+    $future->setTimeout($this->execTimeout);
+    return $future;
   }
 }
