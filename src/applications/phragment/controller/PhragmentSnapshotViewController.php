@@ -95,6 +95,13 @@ final class PhragmentSnapshotViewController extends PhragmentController {
       ->setPolicyObject($snapshot)
       ->setUser($viewer);
 
+    $file_uri = null;
+    if (!$snapshot->getPrimaryFragment()->isDirectory()) {
+      $file_uri = $this->getApplicationURI(
+        'file@'.$snapshot->getName().
+        '/'.$snapshot->getPrimaryFragment()->getPath());
+    }
+
     $zip_uri = $this->getApplicationURI(
       'zip@'.$snapshot->getName().
       '/'.$snapshot->getPrimaryFragment()->getPath());
@@ -108,6 +115,14 @@ final class PhragmentSnapshotViewController extends PhragmentController {
       ->setUser($viewer)
       ->setObject($snapshot)
       ->setObjectURI($snapshot->getURI());
+    $actions->addAction(
+      id(new PhabricatorActionView())
+        ->setName(pht('Download Snapshot'))
+        ->setHref($this->isCorrectlyConfigured() ? $file_uri : null)
+        ->setDisabled(
+          $snapshot->getPrimaryFragment()->isDirectory() ||
+          !$this->isCorrectlyConfigured())
+        ->setIcon('download'));
     $actions->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Download Snapshot as ZIP'))

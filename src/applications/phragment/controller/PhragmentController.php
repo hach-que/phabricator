@@ -88,6 +88,10 @@ abstract class PhragmentController extends PhabricatorController {
       $fragment,
       PhabricatorPolicyCapability::CAN_EDIT);
 
+    $file_uri = null;
+    if (!$fragment->isDirectory()) {
+      $file_uri = $this->getApplicationURI('file/'.$fragment->getPath());
+    }
     $zip_uri = $this->getApplicationURI('zip/'.$fragment->getPath());
 
     $actions = id(new PhabricatorActionListView())
@@ -98,7 +102,8 @@ abstract class PhragmentController extends PhabricatorController {
       id(new PhabricatorActionView())
         ->setName(pht('Download Fragment'))
         ->setHref($this->isCorrectlyConfigured() ? $file_uri : null)
-        ->setDisabled($file === null || !$this->isCorrectlyConfigured())
+        ->setDisabled(
+          $fragment->isDirectory() || !$this->isCorrectlyConfigured())
         ->setIcon('fa-download'));
     $actions->addAction(
       id(new PhabricatorActionView())

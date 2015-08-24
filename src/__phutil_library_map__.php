@@ -3339,6 +3339,7 @@ phutil_register_library_map(array(
     'PhragmentController' => 'applications/phragment/controller/PhragmentController.php',
     'PhragmentCreateController' => 'applications/phragment/controller/PhragmentCreateController.php',
     'PhragmentDAO' => 'applications/phragment/storage/PhragmentDAO.php',
+    'PhragmentFileController' => 'applications/phragment/controller/PhragmentFileController.php',
     'PhragmentFragment' => 'applications/phragment/storage/PhragmentFragment.php',
     'PhragmentFragmentPHIDType' => 'applications/phragment/phid/PhragmentFragmentPHIDType.php',
     'PhragmentFragmentQuery' => 'applications/phragment/query/PhragmentFragmentQuery.php',
@@ -7531,6 +7532,7 @@ phutil_register_library_map(array(
     'PhragmentController' => 'PhabricatorController',
     'PhragmentCreateController' => 'PhragmentController',
     'PhragmentDAO' => 'PhabricatorLiskDAO',
+    'PhragmentFileController' => 'PhragmentController',
     'PhragmentFragment' => array(
       'PhragmentDAO',
       'PhabricatorPolicyInterface',

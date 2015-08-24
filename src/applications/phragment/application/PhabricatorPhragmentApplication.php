@@ -45,6 +45,8 @@ final class PhabricatorPhragmentApplication extends PhabricatorApplication {
         'history/(?P<dblob>.+)' => 'PhragmentHistoryController',
         'zip/(?P<dblob>.+)' => 'PhragmentZIPController',
         'zip@(?P<snapshot>[^/]+)/(?P<dblob>.+)' => 'PhragmentZIPController',
+        'file/(?P<dblob>.+)' => 'PhragmentFileController',
+        'file@(?P<snapshot>[^/]+)/(?P<dblob>.+)' => 'PhragmentFileController',
         'version/(?P<id>[0-9]*)/' => 'PhragmentVersionController',
         'patch/(?P<aid>[0-9x]*)/(?P<bid>[0-9]*)/' => 'PhragmentPatchController',
         'revert/(?P<id>[0-9]*)/(?P<dblob>.*)' => 'PhragmentRevertController',
