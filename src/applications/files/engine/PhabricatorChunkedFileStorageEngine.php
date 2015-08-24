@@ -49,6 +49,14 @@ final class PhabricatorChunkedFileStorageEngine
     return $buffer;
   }
 
+  /**
+   * Return null because there are no direct download URI.
+   * @task impl
+   */
+  public function retrieveFileURI($handle) {
+    return null;
+  }
+
   public function deleteFile($handle) {
     $engine = new PhabricatorDestructionEngine();
     $chunks = $this->loadAllChunks($handle, true);

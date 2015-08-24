@@ -42,6 +42,10 @@ final class PhabricatorTestStorageEngine
     throw new Exception(pht("No such file with handle '%s'!", $handle));
   }
 
+  public function retrieveFileURI($handle) {
+    return null;
+  }
+
   public function deleteFile($handle) {
     AphrontWriteGuard::willWrite();
     unset(self::$storage[$handle]);

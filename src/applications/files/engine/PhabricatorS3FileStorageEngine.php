@@ -106,6 +106,19 @@ final class PhabricatorS3FileStorageEngine
 
 
   /**
+   * Return absolute public URI for redirected download.
+   * @task impl
+   */
+  public function retrieveFileURI($handle) {
+    $base_uri = 'https://'.$this->getBucketName().'.s3.amazonaws.com/';
+    if ($base_uri === null) {
+      return null;
+    }
+    return $base_uri.$handle;
+  }
+
+
+  /**
    * Delete a blob from Amazon S3.
    */
   public function deleteFile($handle) {

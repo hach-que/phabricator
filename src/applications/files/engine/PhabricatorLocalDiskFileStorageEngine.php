@@ -76,6 +76,15 @@ final class PhabricatorLocalDiskFileStorageEngine
 
 
   /**
+   * Return null because there are no direct download URI.
+   * @task impl
+   */
+  public function retrieveFileURI($handle) {
+    return null;
+  }
+
+
+  /**
    * Deletes the file from local disk, if it exists.
    * @task impl
    */

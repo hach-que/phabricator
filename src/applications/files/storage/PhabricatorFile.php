@@ -747,6 +747,21 @@ final class PhabricatorFile extends PhabricatorFileDAO
     return $this->getCDNURI($this->generateOneTimeToken());
   }
 
+  public function getMostDirectURI() {
+    if (PhabricatorEnv::getEnvConfig('storage.enable-public-uri')) {
+      // Redirect to the public URI if it's present.  This means Conduit
+      // methods such as phragment.getstate will return URLs directly
+      // pointing to Amazon for downloading files.
+      $engine = $this->instantiateStorageEngine();
+      $uri = $engine->retrieveFileURI($this->getStorageHandle());
+      if ($uri === null) {
+        return $this->getDownloadURI();
+      }
+      return $uri;
+    } else {
+      return $this->getDownloadURI();
+    }
+  }
 
   public function getInfoURI() {
     return '/'.$this->getMonogram();

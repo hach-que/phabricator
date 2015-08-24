@@ -158,6 +158,19 @@ final class PhabricatorFilesConfigOptions
             "Set this to a valid Amazon S3 bucket to store files there. You ".
             "must also configure S3 access keys in the 'Amazon Web Services' ".
             "group.")),
+     $this->newOption('storage.enable-public-uri', 'bool', false)
+        ->setSummary(pht('Configure usage of Amazon S3 public URI.'))
+        ->setDescription(
+          pht(
+            "Change this to allow certain applications to return file URLs ".
+            "that directly point to files stored on S3.  This allows you ".
+            "to offload requests directly to Amazon and reduce load on ".
+            "the Phabricator server, at the cost of configuring Amazon S3 ".
+            "for public access.\n\n".
+            "NOTE: This currently only affects files which reside on the ".
+            "Amazon S3 storage engine.\n\n".
+            "NOTE: Currently Phragment's Conduit APIs are the only ".
+            "area that uses this functionality.")),
      $this->newOption(
         'metamta.files.subject-prefix',
         'string',

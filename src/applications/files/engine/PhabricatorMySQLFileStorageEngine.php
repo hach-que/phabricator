@@ -67,6 +67,15 @@ final class PhabricatorMySQLFileStorageEngine
 
 
   /**
+   * Return null because there are no direct download URI.
+   * @task impl
+   */
+  public function retrieveFileURI($handle) {
+    return null;
+  }
+
+
+  /**
    * Delete a blob from MySQL.
    */
   public function deleteFile($handle) {

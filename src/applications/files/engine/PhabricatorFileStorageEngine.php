@@ -179,6 +179,25 @@ abstract class PhabricatorFileStorageEngine extends Phobject {
 
 
   /**
+   * Retrieve an absolute URI to which a download can be performed.  This
+   * can be used to direct downloads to Amazon S3 for non-user
+   * applications (such as Conduit APIs).
+   *
+   * This URL should not be provided to end users, as the underlying storage
+   * engine will most likely not provide the correct semantics for
+   * browser-based downloads.
+   *
+   * Return null to indicate that no public URI is available.
+   *
+   * @param   string  The handle returned from @{method:writeFile} when the
+   *                  file was written.
+   * @return  string  An absolute URI from which a download can be performed.
+   * @task file
+   */
+  abstract public function retrieveFileURI($handle);
+
+
+  /**
    * Delete the data for a file previously written by @{method:writeFile}.
    *
    * @param   string  The handle returned from @{method:writeFile} when the
