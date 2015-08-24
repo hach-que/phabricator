@@ -35,7 +35,9 @@ final class DrydockPreallocatedHostBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
     return
-      $lease->getAttribute('platform') === $resource->getAttribute('platform');
+      $lease->getAttribute('platform') ===
+        $resource->getAttribute('platform') ||
+      $lease->getAttribute('platform') === null;
   }
 
   protected function shouldAllocateLease(
@@ -87,6 +89,10 @@ final class DrydockPreallocatedHostBlueprintImplementation
     $cmd->execx('mkdir %s', $full_path);
 
     $lease->setAttribute('path', $full_path);
+    if ($lease->getAttribute('platform') === null) {
+      // If the lease does not have a platform set, set it now.
+      $lease->setAttribute('platform', $v_platform);
+    }
   }
 
   public function getType() {
