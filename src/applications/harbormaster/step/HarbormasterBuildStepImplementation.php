@@ -184,21 +184,47 @@ abstract class HarbormasterBuildStepImplementation extends Phobject {
    * @return string String with variables replaced safely into it.
    */
   protected function mergeVariables($function, $pattern, array $variables) {
-    $regexp = '/\\$\\{(?P<name>[a-z\\.]+)\\}/';
+    $regexp = '/\\$\\{(?P<opt>\\??)(?P<name>[a-zA-Z\\.]+)\\}/';
 
     $matches = null;
     preg_match_all($regexp, $pattern, $matches);
 
     $argv = array();
-    foreach ($matches['name'] as $name) {
+    $remove_at = array();
+    $remove_at_count = 0;
+    foreach ($matches['name'] as $idx => $name) {
+      $is_optional = $matches['opt'][$idx] === '?';
+      if ($is_optional && idx($variables, $name, '') === '') {
+        // Skip this variable entirely (don't even put quotes around
+        // the empty argument).
+        $remove_at[] = $remove_at_count++;
+        continue;
+      }
       if (!array_key_exists($name, $variables)) {
         throw new Exception(pht("No such variable '%s'!", $name));
       }
       $argv[] = $variables[$name];
+      $remove_at_count++;
     }
 
     $pattern = str_replace('%', '%%', $pattern);
     $pattern = preg_replace($regexp, '%s', $pattern);
+
+    // Remove %s for optional arguments which have been omitted.
+    $total_replacements = substr_count($pattern, '%s');
+    $current_offset = 0;
+    for ($i = 0; $i < $total_replacements && count($remove_at) > 0; $i++) {
+      $current_offset = strpos($pattern, '%s', $current_offset);
+      $head = head($remove_at);
+      if ($head === $i) {
+        $pattern =
+          substr($pattern, 0, $current_offset).
+          substr($pattern, $current_offset + 2);
+        array_shift($remove_at);
+      } else {
+        $current_offset += 2;
+      }
+    }
 
     return call_user_func($function, $pattern, $argv);
   }
