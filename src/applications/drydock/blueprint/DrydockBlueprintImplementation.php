@@ -60,8 +60,30 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     return $this;
   }
 
+  public function supportsAutomaticCustomAttributes() {
+    return true;
+  }
+
   public function getFieldSpecifications() {
-    return array();
+    if ($this->supportsAutomaticCustomAttributes()) {
+      return array(
+        'attr-header' => array(
+          'name' => pht('Custom Attributes'),
+          'type' => 'header',
+        ),
+        'attributes' => array(
+          'name' => pht('Attributes'),
+          'type' => 'textarea',
+          'caption' => pht(
+            'A newline separated list of custom blueprint '.
+            'attributes.  Each attribute should be specified in '.
+            'a key=value format.'),
+          'monospace' => true,
+        ),
+      );
+    } else {
+      return array();
+    }
   }
 
   public function getDetail($key, $default = null) {
@@ -80,6 +102,16 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     DrydockLease $lease) {
 
     $scope = $this->pushActiveScope($resource, $lease);
+
+    if ($this->supportsAutomaticCustomAttributes()) {
+      $custom_match = DrydockCustomAttributes::hasRequirements(
+        $lease->getAttributes(),
+        $this->getDetail('attributes', ''));
+
+      if (!$custom_match) {
+        return false;
+      }
+    }
 
     return $this->canAllocateLease($resource, $lease);
   }

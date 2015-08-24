@@ -231,6 +231,16 @@ final class DrydockAllocatorWorker extends PhabricatorWorker {
             continue;
           }
 
+          if ($candidate_blueprint->supportsAutomaticCustomAttributes()) {
+            $custom_match = DrydockCustomAttributes::hasRequirements(
+              $lease->getAttributes(),
+              $candidate_blueprint->getDetail('attributes', ''));
+            if (!$custom_match) {
+              unset($blueprints[$key]);
+              continue;
+            }
+          }
+
           if (!$candidate_blueprint->canAllocateResourceForLease($lease)) {
             unset($blueprints[$key]);
             continue;

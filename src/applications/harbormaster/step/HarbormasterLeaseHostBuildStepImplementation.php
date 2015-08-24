@@ -32,6 +32,9 @@ final class HarbormasterLeaseHostBuildStepImplementation
     $artifact = count($artifacts) > 0 ? head($artifacts) : null;
 
     if ($artifact === null) {
+      $custom_attributes = DrydockCustomAttributes::parse(
+        idx($settings, 'attributes', ''));
+
       // Create the lease.
       $lease = id(new DrydockLease())
         ->setResourceType('host')
@@ -39,7 +42,7 @@ final class HarbormasterLeaseHostBuildStepImplementation
         ->setAttributes(
           array(
             'platform' => $settings['platform'],
-          ))
+          ) + $custom_attributes)
         ->queueForActivation();
 
       // Create the associated artifact.
@@ -87,6 +90,14 @@ final class HarbormasterLeaseHostBuildStepImplementation
         'name' => pht('Platform'),
         'type' => 'text',
         'required' => true,
+      ),
+      'attributes' => array(
+        'name' => pht('Required Attributes'),
+        'type' => 'textarea',
+        'caption' => pht(
+          'A newline separated list of required host attributes.  Each '.
+          'attribute should be specified in a key=value format.'),
+        'monospace' => true,
       ),
     );
   }

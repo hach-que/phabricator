@@ -147,6 +147,6 @@ abstract class DrydockMinMaxBlueprintImplementation
           'overallocate the lease to an existing resource and '.
           'exceed the limit specified here.'),
       ),
-    );
+    ) + parent::getFieldSpecifications();
   }
 }
