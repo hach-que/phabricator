@@ -29,6 +29,12 @@ final class DrydockBlueprintViewController extends DrydockBlueprintController {
 
     $resources = id(new DrydockResourceQuery())
       ->withBlueprintPHIDs(array($blueprint->getPHID()))
+      ->withStatuses(array(
+        DrydockResourceStatus::STATUS_ALLOCATING,
+        DrydockResourceStatus::STATUS_PENDING,
+        DrydockResourceStatus::STATUS_OPEN,
+        DrydockResourceStatus::STATUS_CLOSING,
+      ))
       ->setViewer($viewer)
       ->execute();
 

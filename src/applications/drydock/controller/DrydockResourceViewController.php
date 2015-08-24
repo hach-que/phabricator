@@ -28,6 +28,11 @@ final class DrydockResourceViewController extends DrydockResourceController {
     $leases = id(new DrydockLeaseQuery())
       ->setViewer($viewer)
       ->withResourceIDs(array($resource->getID()))
+      ->withStatuses(array(
+        DrydockLeaseStatus::STATUS_ACQUIRING,
+        DrydockLeaseStatus::STATUS_ACTIVE,
+        DrydockLeaseStatus::STATUS_PENDING,
+      ))
       ->execute();
 
     $lease_list = id(new DrydockLeaseListView())
