@@ -43,6 +43,7 @@ final class DrydockAllocationContext extends Phobject {
       'WHERE resource.blueprintPHID = %s '.
       'AND resource.status IN (%Ld) '.
       'AND lease.status IN (%Ld) '.
+      'AND lease.isTransientLease = 0 '.
       'GROUP BY resource.id',
       $table_resource,
       $table_lease,

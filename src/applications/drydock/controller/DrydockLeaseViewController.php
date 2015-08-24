@@ -130,6 +130,10 @@ final class DrydockLeaseViewController extends DrydockLeaseController {
         pht('No Resource'));
     }
 
+    $view->addProperty(
+      pht('Lease Type'),
+      $lease->getIsTransientLease() ? pht('Transient') : pht('Standard'));
+
     $attributes = $lease->getAttributes();
     if ($attributes) {
       $view->addSectionHeader(pht('Attributes'));

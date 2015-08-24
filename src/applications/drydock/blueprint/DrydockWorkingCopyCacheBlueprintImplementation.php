@@ -79,6 +79,7 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
 
     $host_lease = id(new DrydockLease())
       ->setResourceType('host')
+      ->setIsTransientLease(1) // The cache should not hold the host open.
       ->setAttributes(
         array(
           'resourceID' => $host_resource_id,

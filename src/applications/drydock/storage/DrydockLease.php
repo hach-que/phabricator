@@ -10,6 +10,7 @@ final class DrydockLease extends DrydockDAO
   protected $attributes = array();
   protected $status = DrydockLeaseStatus::STATUS_PENDING;
   protected $taskID;
+  protected $isTransientLease = 0;
 
   private $resource = self::ATTACHABLE;
   private $releaseOnDestruction;
@@ -50,6 +51,7 @@ final class DrydockLease extends DrydockDAO
         'taskID' => 'id?',
         'ownerPHID' => 'phid?',
         'resourceID' => 'id?',
+        'isTransientLease' => 'bool',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_phid' => null,

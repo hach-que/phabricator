@@ -47,6 +47,10 @@ final class DrydockLeaseListView extends AphrontView {
         $item->setStatusIcon('fa-dot-circle-o red');
       }
 
+      if ($lease->getIsTransientLease()) {
+        $item->addIcon('fa-leaf grey', pht('Transient'));
+      }
+
       $view->addItem($item);
     }
 
