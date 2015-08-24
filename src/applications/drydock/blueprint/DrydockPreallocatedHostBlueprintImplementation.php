@@ -100,7 +100,12 @@ final class DrydockPreallocatedHostBlueprintImplementation
 
     switch ($type) {
       case 'command':
-        return id(new DrydockSSHCommandInterface())
+        $interface = new DrydockSSHCommandInterface();
+        if ($resource->getAttribute('platform') === 'windows') {
+          $interface = new DrydockWinRMCommandInterface();
+        }
+
+        return $interface
           ->setConfiguration(array(
             'host' => $resource->getAttribute('host'),
             'port' => $resource->getAttribute('port'),
