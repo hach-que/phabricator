@@ -219,7 +219,7 @@ final class PhragmentFragment extends PhragmentDAO
     // can't see it. We're going to create a new child with the exact
     // same path and then bad things will happen.
     $children = id(new PhragmentFragmentQuery())
-      ->setViewer($viewer)
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->needLatestVersion(true)
       ->withLeadingPath($this->getPath().'/')
       ->execute();
