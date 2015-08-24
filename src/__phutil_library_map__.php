@@ -3351,6 +3351,7 @@ phutil_register_library_map(array(
     'PhragmentPatchUtil' => 'applications/phragment/util/PhragmentPatchUtil.php',
     'PhragmentPolicyController' => 'applications/phragment/controller/PhragmentPolicyController.php',
     'PhragmentQueryFragmentsConduitAPIMethod' => 'applications/phragment/conduit/PhragmentQueryFragmentsConduitAPIMethod.php',
+    'PhragmentQuerySnapshotsConduitAPIMethod' => 'applications/phragment/conduit/PhragmentQuerySnapshotsConduitAPIMethod.php',
     'PhragmentRevertController' => 'applications/phragment/controller/PhragmentRevertController.php',
     'PhragmentSchemaSpec' => 'applications/phragment/storage/PhragmentSchemaSpec.php',
     'PhragmentSnapshot' => 'applications/phragment/storage/PhragmentSnapshot.php',
@@ -7548,6 +7549,7 @@ phutil_register_library_map(array(
     'PhragmentPatchUtil' => 'Phobject',
     'PhragmentPolicyController' => 'PhragmentController',
     'PhragmentQueryFragmentsConduitAPIMethod' => 'PhragmentConduitAPIMethod',
+    'PhragmentQuerySnapshotsConduitAPIMethod' => 'PhragmentConduitAPIMethod',
     'PhragmentRevertController' => 'PhragmentController',
     'PhragmentSchemaSpec' => 'PhabricatorConfigSchemaSpec',
     'PhragmentSnapshot' => array(
