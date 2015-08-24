@@ -377,6 +377,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
     if ($context->getCurrentResourceLeaseCount() === 0) {
       if ($this->shouldCloseUnleasedResource($context, $resource)) {
         self::writeLog(
+          $this->instance,
           $resource,
           null,
           pht('Closing resource because it has no more active leases'));
@@ -460,7 +461,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
             $lease->setStatus(DrydockLeaseStatus::STATUS_RELEASED);
             break;
         }
-        self::writeLog($resource, $lease, $message);
+        self::writeLog($this->instance, $resource, $lease, $message);
         $lease->save();
       }
 
