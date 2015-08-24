@@ -100,9 +100,25 @@ final class DrydockPreallocatedHostBlueprintImplementation
 
     switch ($type) {
       case 'command':
+      case 'command-'.PhutilCommandString::MODE_POWERSHELL:
+      case 'command-'.PhutilCommandString::MODE_WINDOWSCMD:
+      case 'command-'.PhutilCommandString::MODE_BASH:
         $interface = new DrydockSSHCommandInterface();
         if ($resource->getAttribute('platform') === 'windows') {
           $interface = new DrydockWinRMCommandInterface();
+        }
+
+        switch ($type) {
+          case 'command':
+          case 'command-'.PhutilCommandString::MODE_POWERSHELL:
+            $interface->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+            break;
+          case 'command-'.PhutilCommandString::MODE_WINDOWSCMD:
+            $interface->setEscapingMode(PhutilCommandString::MODE_WINDOWSCMD);
+            break;
+          case 'command-'.PhutilCommandString::MODE_BASH:
+            $interface->setEscapingMode(PhutilCommandString::MODE_BASH);
+            break;
         }
 
         return $interface
