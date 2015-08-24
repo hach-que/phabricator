@@ -4,6 +4,7 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
   private $passphraseSSHKey;
   private $connectTimeout;
+  private $execTimeout;
 
   private function openCredentialsIfNotOpen() {
     if ($this->passphraseSSHKey !== null) {
@@ -38,6 +39,11 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
     return $this;
   }
 
+  public function setExecTimeout($timeout) {
+    $this->execTimeout = $timeout;
+    return $this;
+  }
+
   public function getExecFuture($command) {
     $this->openCredentialsIfNotOpen();
 
@@ -52,7 +58,7 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
         'ConnectTimeout='.$this->connectTimeout);
     }
 
-    return new ExecFuture(
+    $future = new ExecFuture(
       'ssh '.
       '-o LogLevel=quiet '.
       '-o StrictHostKeyChecking=no '.
@@ -65,5 +71,7 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       $this->passphraseSSHKey->getUsernameEnvelope(),
       $this->getConfig('host'),
       $full_command);
+    $future->setTimeout($this->execTimeout);
+    return $future;
   }
 }
