@@ -15,6 +15,10 @@ final class DrydockWorkingCopyCacheBlueprintImplementation
     return pht('Allows Drydock to cache repositories on host resources.');
   }
 
+  public function supportsAutomaticCustomAttributes() {
+    return false;
+  }
+
   public function canAllocateResourceForLease(DrydockLease $lease) {
     return true;
   }

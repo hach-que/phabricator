@@ -17,6 +17,10 @@ final class DrydockWorkingCopyBlueprintImplementation
       'copies of repositories and revisions.');
   }
 
+  public function supportsAutomaticCustomAttributes() {
+    return false;
+  }
+
   private function resolveRelatedObjectsForLease(DrydockLease $lease) {
     if ($lease->getAttribute('resolved.target') !== null) {
       return;
