@@ -205,6 +205,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
 
     if ($allocation_exception) {
       $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+      $lease->setBrokenReason($allocation_exception->getMessage());
       $lease->save();
       $this->logException($allocation_exception);
       $this->closeResourceIfDesired($resource);
@@ -273,6 +274,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
       $this->executeAcquireLease($resource, $ephemeral_lease);
     } catch (Exception $ex) {
       $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+      $lease->setBrokenReason($ex->getMessage());
       $lease->save();
       $this->logException($ex);
       $this->closeResourceIfDesired($resource);
@@ -450,6 +452,7 @@ abstract class DrydockBlueprintImplementation extends Phobject {
           case DrydockLeaseStatus::STATUS_PENDING:
             $message = pht('Breaking pending lease (resource closing).');
             $lease->setStatus(DrydockLeaseStatus::STATUS_BROKEN);
+            $lease->setBrokenReason('Resource forcibly closed');
             break;
           case DrydockLeaseStatus::STATUS_ACTIVE:
             $message = pht('Releasing active lease (resource closing).');
