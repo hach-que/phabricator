@@ -66,6 +66,12 @@ abstract class DrydockMinMaxBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    // Always permit the allocation of transient leases, as they will not
+    // keep the resource open.
+    if ($lease->getIsTransientLease()) {
+      return true;
+    }
+
     // If the current resource can allocate a lease, allow it.
     if ($context->getCurrentResourceLeaseCount() <
           $this->getDetail('leases-per-resource')) {

@@ -36,6 +36,12 @@ abstract class DrydockMinMaxExpiryBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    // Always permit the allocation of transient leases, as they will not
+    // keep the resource open.
+    if ($lease->getIsTransientLease()) {
+      return true;
+    }
+
     // If we have no leases allocated to this resource, then we always allow
     // the parent logic to evaluate.  The reason for this is that an expired
     // resource can only be closed when a lease is released, so if the resource
