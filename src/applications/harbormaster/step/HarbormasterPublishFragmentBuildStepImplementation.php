@@ -17,10 +17,37 @@ final class HarbormasterPublishFragmentBuildStepImplementation
   }
 
   public function getDescription() {
+
+    $values = array();
+    $publish = $this->getSetting('publish_on');
+    $publish_text = '';
+    if (in_array('commit', $publish)) {
+      $values[] = pht('commits');
+    }
+    if (in_array('revision', $publish)) {
+      $values[] = pht('differential revisions');
+    }
+    if (count($values) === 0) {
+      $publish_text = pht('Never');
+    } else {
+      $publish_text = pht('For %s,', implode(' and ', $values));
+    }
+
     return pht(
-      'Publish file artifact %s as fragment %s.',
+      '%s publish file artifact %s as fragment %s.',
+      $publish_text,
       $this->formatSettingForDescription('artifact'),
       $this->formatSettingForDescription('path'));
+  }
+
+  public function logBehaviour(
+    HarbormasterBuild $build,
+    HarbormasterBuildTarget $build_target,
+    $message) {
+    $log_behaviour = $build->createLog($build_target, 'publish', 'result');
+    $start_behaviour = $log_behaviour->start();
+    $log_behaviour->append($message);
+    $log_behaviour->finalize($start_behaviour);
   }
 
   public function execute(
@@ -30,6 +57,31 @@ final class HarbormasterPublishFragmentBuildStepImplementation
     $settings = $this->getSettings();
     $variables = $build_target->getVariables();
     $viewer = PhabricatorUser::getOmnipotentUser();
+
+    // Check if we should publish for this buildable.
+    $buildable = $build->getBuildable();
+    $object = $buildable->getBuildableObject();
+    if ($object instanceof PhabricatorRepositoryCommit) {
+      if (!in_array('commit', $settings['publish_on'])) {
+        $this->logBehaviour(
+          $build,
+          $build_target,
+          'Not publishing because this is a commit and this step only '.
+          'publishes for '.implode(', ', $settings['publish_on']));
+        return;
+      }
+    } else if ($object instanceof DifferentialDiff) {
+      if (!in_array('revision', $settings['publish_on'])) {
+        $this->logBehaviour(
+          $build,
+          $build_target,
+          'Not publishing because this is a revision and this step only '.
+          'publishes for '.implode(', ', $settings['publish_on']));
+        return;
+      }
+    } else {
+      throw new Exception('Unknown buildable type!');
+    }
 
     $path = $this->mergeVariables(
       'vsprintf',
@@ -59,6 +111,11 @@ final class HarbormasterPublishFragmentBuildStepImplementation
         $fragment->updateFromFile($viewer, $file);
       }
     }
+
+    $this->logBehaviour(
+      $build,
+      $build_target,
+      'The artifact was published successfully.');
   }
 
   public function getArtifactInputs() {
@@ -82,6 +139,10 @@ final class HarbormasterPublishFragmentBuildStepImplementation
         'name' => pht('File Artifact'),
         'type' => 'text',
         'required' => true,
+      ),
+      'publish_on' => array(
+        'name' => pht('Publish On'),
+        'type' => 'buildabletype',
       ),
     );
   }
