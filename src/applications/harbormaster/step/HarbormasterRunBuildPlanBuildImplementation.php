@@ -144,25 +144,25 @@ final class HarbormasterRunBuildPlanBuildImplementation
       }
     }
 
-    $artifact = $build->createArtifact(
-      $build_target,
+    $artifact = $build_target->createArtifact(
+      PhabricatorUser::getOmnipotentUser(),
       'build_plan_'.$build_target->getID(),
-      HarbormasterBuildArtifact::TYPE_URI);
-    $artifact->setArtifactData(array(
-      'name' => 'Target Build Plan',
-      'uri' => '/harbormaster/plan/'.$target_plan->getID(),
-    ));
-    $artifact->save();
+      HarbormasterURIArtifact::ARTIFACTCONST,
+      array(
+        'name' => 'Target Build Plan',
+        'uri' => PhabricatorEnv::getProductionURI(
+          '/harbormaster/plan/'.$target_plan->getID()),
+      ));
 
-    $artifact = $build->createArtifact(
-      $build_target,
+    $artifact = $build_target->createArtifact(
+      PhabricatorUser::getOmnipotentUser(),
       'build_'.$build_target->getID(),
-      HarbormasterBuildArtifact::TYPE_URI);
-    $artifact->setArtifactData(array(
-      'name' => 'Target Build',
-      'uri' => '/harbormaster/build/'.$target_build->getID(),
-    ));
-    $artifact->save();
+      HarbormasterURIArtifact::ARTIFACTCONST,
+      array(
+        'name' => 'Target Build',
+        'uri' => PhabricatorEnv::getProductionURI(
+          '/harbormaster/build/'.$target_build->getID()),
+      ));
 
     $target_build_phid = $target_build->getPHID();
 
@@ -178,7 +178,7 @@ final class HarbormasterRunBuildPlanBuildImplementation
 
       // If the build has not yet passed, yield for the moment.
       if ($target_build->isBuilding() || $target_build->isRestarting() ||
-        $target_build->getBuildStatus() === HarbormasterBuild::STATUS_STOPPED) {
+        $target_build->getBuildStatus() === HarbormasterBuild::STATUS_PAUSED) {
         sleep(15);
         continue;
       }

@@ -61,12 +61,19 @@ final class HarbormasterHostArtifact extends HarbormasterArtifact {
   }
 
   public function releaseArtifact(PhabricatorUser $actor) {
-    $lease = $this->loadArtifactLease($actor);
-    $resource = $lease->getResource();
-    $blueprint = $resource->getBlueprint();
+    try {
+      $lease = $this->loadArtifactLease($actor);
+    } catch (Exception $ex) {
+      return;
+    }
 
-    if ($lease->isActive()) {
-      $blueprint->releaseLease($resource, $lease);
+    $resource = $lease->getResource();
+    if ($resource) {
+      $blueprint = $resource->getBlueprint();
+
+      if ($lease->isActive()) {
+        $blueprint->releaseLease($resource, $lease);
+      }
     }
   }
 
