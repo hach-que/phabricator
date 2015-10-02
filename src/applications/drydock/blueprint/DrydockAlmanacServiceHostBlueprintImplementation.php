@@ -158,6 +158,9 @@ final class DrydockAlmanacServiceHostBlueprintImplementation
 
     switch ($type) {
       case DrydockCommandInterface::INTERFACE_TYPE:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_POWERSHELL:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_WINDOWSCMD:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_BASH:
         $credential_phid = $blueprint->getFieldValue('credentialPHID');
         $binding_phid = $resource->getAttribute('almanacBindingPHID');
 
@@ -174,12 +177,54 @@ final class DrydockAlmanacServiceHostBlueprintImplementation
 
         $interface = $binding->getInterface();
 
-        return id(new DrydockSSHCommandInterface())
-          ->setConfig('credentialPHID', $credential_phid)
-          ->setConfig('host', $interface->getAddress())
-          ->setConfig('port', $interface->getPort());
+        return $this->getCommandInterfaceWithExplicitHost(
+          $blueprint,
+          $resource,
+          $interface,
+          $type);
     }
   }
+  
+  private function getCommandInterfaceWithExplicitHost(
+    DrydockBlueprint $blueprint,
+    DrydockResource $resource,
+    AlmanacInterface $almanacInterface,
+    $type) {
+
+    $interface = new DrydockSSHCommandInterface();
+    if ($blueprint->getFieldValue('platform') === 'windows') {
+      $interface = new DrydockWinRMCommandInterface();
+    }
+
+    switch ($type) {
+      case DrydockCommandInterface::INTERFACE_TYPE:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_POWERSHELL:
+        $interface->setEscapingMode(PhutilCommandString::MODE_POWERSHELL);
+        break;
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_WINDOWSCMD:
+        $interface->setEscapingMode(PhutilCommandString::MODE_WINDOWSCMD);
+        break;
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_BASH:
+        $interface->setEscapingMode(PhutilCommandString::MODE_BASH);
+        break;
+    }
+    
+    $interface
+      ->setConfig('host', $almanacInterface->getAddress())
+      ->setConfig('port', $almanacInterface->getPort())
+      ->setConfig('platform', $blueprint->getFieldValue('platform'));
+    
+    if ($blueprint->getFieldValue('platform') === 'windows') {
+      $interface
+        ->setConfig('credentialPHID', $blueprint->getFieldValue('winrmAuthPHID'));
+    } else {
+      $interface
+        ->setConfig('credentialPHID', $blueprint->getFieldValue('credentialPHID'));
+    }
+    
+    return $interface;
+  }
+
 
   protected function getCustomFieldSpecifications() {
     return array(
@@ -199,6 +244,22 @@ final class DrydockAlmanacServiceHostBlueprintImplementation
           PassphraseSSHPrivateKeyCredentialType::PROVIDES_TYPE,
         'credential.type' =>
           PassphraseSSHPrivateKeyTextCredentialType::CREDENTIAL_TYPE,
+      ),
+      'winrmAuthPHID' => array(
+        'name' => pht('WinRM Credentials'),
+        'type' => 'credential',
+        'credential.provides' =>
+          PassphrasePasswordCredentialType::PROVIDES_TYPE,
+        'credential.type' =>
+          PassphrasePasswordCredentialType::CREDENTIAL_TYPE,
+      ),
+      'platform' => array(
+        'name' => pht('Platform'),
+        'type' => 'select',
+        'options' => array(
+          'linux' => pht('Linux or other UNIX'),
+          'windows' => pht('Windows'),
+        ),
       ),
     );
   }

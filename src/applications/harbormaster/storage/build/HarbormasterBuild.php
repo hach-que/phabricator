@@ -132,7 +132,7 @@ final class HarbormasterBuild extends HarbormasterDAO
     );
 
     foreach ($this->getBuildParameters() as $key => $value) {
-      $results['build/'.$key] = $value;
+      $results[$key] = $value;
     }
 
     $buildable = $this->getBuildable();

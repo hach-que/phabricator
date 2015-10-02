@@ -40,8 +40,15 @@ final class HarbormasterDrydockCommandBuildStepImplementation
       'vcsprintf',
       $settings['command'],
       $variables);
-
-    $interface = $lease->getInterface(DrydockCommandInterface::INTERFACE_TYPE);
+      
+    switch (idx($settings, 'shell', PhutilCommandString::MODE_DEFAULT)) {
+      case PhutilCommandString::MODE_DEFAULT:
+        $interface = $lease->getInterface(DrydockCommandInterface::INTERFACE_TYPE);
+        break;
+      default:
+        $interface = $lease->getInterface(DrydockCommandInterface::INTERFACE_TYPE.'-'.$settings['shell']);
+        break;
+    }
 
     $exec_future = $interface->getExecFuture('%C', $command);
 
@@ -77,6 +84,20 @@ final class HarbormasterDrydockCommandBuildStepImplementation
       'command' => array(
         'name' => pht('Command'),
         'type' => 'text',
+        'required' => true,
+      ),
+      'shell' => array(
+        'name' => pht('Shell'),
+        'type' => 'select',
+        'options' => array(
+          PhutilCommandString::MODE_DEFAULT =>
+            'Default (Shell on Linux; Powershell on Windows)',
+          PhutilCommandString::MODE_BASH => 'Bash',
+          PhutilCommandString::MODE_WINDOWSCMD =>
+            'Windows Command Prompt',
+          PhutilCommandString::MODE_POWERSHELL =>
+            'Windows Powershell',
+        ),
         'required' => true,
       ),
       'artifact' => array(

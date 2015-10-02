@@ -805,6 +805,8 @@ final class DrydockLeaseUpdateWorker extends DrydockWorker {
       array(
         'class' => get_class($ex),
         'message' => $ex->getMessage(),
+        'stdout' => ($ex instanceof CommandException) ? $ex->getStdout() : null,
+        'stderr' => ($ex instanceof CommandException) ? $ex->getStderr() : null,
       ));
 
     $lease->awakenTasks();

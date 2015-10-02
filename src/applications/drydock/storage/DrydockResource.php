@@ -66,6 +66,11 @@ final class DrydockResource extends DrydockDAO
     return $this;
   }
 
+  public function unsetAttribute($key) {
+    unset($this->attributes[$key]);
+    return $this;
+  }
+
   public function getCapability($key, $default = null) {
     return idx($this->capbilities, $key, $default);
   }

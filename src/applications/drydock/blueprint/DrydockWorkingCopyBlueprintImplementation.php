@@ -108,6 +108,18 @@ final class DrydockWorkingCopyBlueprintImplementation
     DrydockResource $resource,
     DrydockLease $lease) {
 
+    $host_lease = id(new DrydockLeaseQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withPHIDs(array($resource->getAttribute('host.leasePHID')))
+      ->executeOne();
+    if ($host_lease === null || !$host_lease->isActive()) {
+      $resource->setStatus(DrydockResourceStatus::STATUS_BROKEN);
+      $resource->save();
+      $resource->scheduleUpdate();
+
+      throw new Exception('Host lease is no longer active');
+    }
+
     $lease
       ->needSlotLock($this->getLeaseSlotLock($resource))
       ->acquireOnResource($resource);
@@ -169,7 +181,7 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     // TODO: Make this configurable.
     $resource_id = $resource->getID();
-    $root = "/var/drydock/workingcopy-{$resource_id}";
+    $root = $blueprint->getFieldValue('path')."/workingcopy-{$resource_id}";
 
     $map = $resource->getAttribute('repositories.map');
 
@@ -182,6 +194,7 @@ final class DrydockWorkingCopyBlueprintImplementation
       $path = "{$root}/repo/{$directory}/";
 
       // TODO: Run these in parallel?
+      $interface->enableConnectionDebugging();
       $interface->execx(
         'git clone -- %s %s',
         (string)$repository->getCloneURIObject(),
@@ -193,6 +206,16 @@ final class DrydockWorkingCopyBlueprintImplementation
       ->activateResource();
   }
 
+
+  public function getFieldSpecifications() {
+    return parent::getFieldSpecifications() + array(
+      'path' => array(
+        'name' => pht('Storage Path'),
+        'type' => 'text',
+      ),
+    );
+  }
+  
   public function destroyResource(
     DrydockBlueprint $blueprint,
     DrydockResource $resource) {
@@ -209,14 +232,30 @@ final class DrydockWorkingCopyBlueprintImplementation
     $lease->releaseOnDestruction();
 
     if ($lease->isActive()) {
-      // Destroy the working copy on disk.
-      $command_type = DrydockCommandInterface::INTERFACE_TYPE;
-      $interface = $lease->getInterface($command_type);
+      if ($lease->getResource()->getAttribute('platform') === 'windows') {
+        // Destroy the working copy on disk.
+        $command_type = DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_POWERSHELL;
+        $interface = $lease->getInterface($command_type);
 
-      $root_key = 'workingcopy.root';
-      $root = $resource->getAttribute($root_key);
-      if (strlen($root)) {
-        $interface->execx('rm -rf -- %s', $root);
+        $root_key = 'workingcopy.root';
+        $root = $resource->getAttribute($root_key);
+        if (strlen($root)) {
+          try {
+            $interface->execx('rm -Recurse -Force %s', $root);
+          } catch (Exception $ex) {
+            // Ignore for now.
+          }
+        }
+      } else {
+        // Destroy the working copy on disk.
+        $command_type = DrydockCommandInterface::INTERFACE_TYPE;
+        $interface = $lease->getInterface($command_type);
+
+        $root_key = 'workingcopy.root';
+        $root = $resource->getAttribute($root_key);
+        if (strlen($root)) {
+          $interface->execx('rm -rf -- %s', $root);
+        }
       }
     }
   }
@@ -247,8 +286,9 @@ final class DrydockWorkingCopyBlueprintImplementation
       $cmd = array();
       $arg = array();
 
-      $cmd[] = 'git clean -d --force';
+      $cmd[] = 'git clean -x -d --force --force';
       $cmd[] = 'git fetch';
+      $cmd[] = 'git fetch origin refs/temp/*:refs/temp/*';
 
       $commit = idx($spec, 'commit');
       $branch = idx($spec, 'branch');
@@ -270,7 +310,7 @@ final class DrydockWorkingCopyBlueprintImplementation
         $arg[] = $branch;
       }
 
-      $this->execxv($interface, $cmd, $arg);
+      $this->execxv($host_lease, $interface, $cmd, $arg);
 
       if (idx($spec, 'default')) {
         $default = $directory;
@@ -294,7 +334,7 @@ final class DrydockWorkingCopyBlueprintImplementation
         $arg[] = $ref_ref;
 
         try {
-          $this->execxv($interface, $cmd, $arg);
+          $this->execxv($host_lease, $interface, $cmd, $arg);
         } catch (CommandException $ex) {
           $display_command = csprintf(
             'git fetch %R %R',
@@ -365,6 +405,9 @@ final class DrydockWorkingCopyBlueprintImplementation
 
     switch ($type) {
       case DrydockCommandInterface::INTERFACE_TYPE:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_POWERSHELL:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_WINDOWSCMD:
+      case DrydockCommandInterface::INTERFACE_TYPE.'-'.PhutilCommandString::MODE_BASH:
         $host_lease = $this->loadHostLease($resource);
         $command_interface = $host_lease->getInterface($type);
 
@@ -505,11 +548,17 @@ final class DrydockWorkingCopyBlueprintImplementation
   }
 
   private function execxv(
+    DrydockLease $host_lease,
     DrydockCommandInterface $interface,
     array $commands,
     array $arguments) {
 
-    $commands = implode(' && ', $commands);
+    if ($host_lease->getResource()->getBlueprint()->getFieldValue('platform') === 'windows') {
+      $commands = implode('; if ($LastExitCode -ne 0) { exit 1; };', $commands);
+    } else {
+      $commands = implode(' && ', $commands);
+    }
+
     $argv = array_merge(array($commands), $arguments);
 
     return call_user_func_array(array($interface, 'execx'), $argv);

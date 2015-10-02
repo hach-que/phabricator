@@ -4,6 +4,8 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
   private $credential;
   private $connectTimeout;
+  private $execTimeout;
+  private $remoteKeyFile;
 
   private function loadCredential() {
     if ($this->credential === null) {
@@ -22,6 +24,11 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
     return $this;
   }
 
+  public function setExecTimeout($timeout) {
+    $this->execTimeout = $timeout;
+    return $this;
+  }
+
   public function getExecFuture($command) {
     $credential = $this->loadCredential();
 
@@ -31,7 +38,8 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
     $flags = array();
     $flags[] = '-o';
-    $flags[] = 'LogLevel=quiet';
+    $flags[] = 'LogLevel='.(
+      $this->getConnectionDebugging() ? 'debug' : 'quiet');
 
     $flags[] = '-o';
     $flags[] = 'StrictHostKeyChecking=no';
@@ -47,13 +55,52 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       $flags[] = 'ConnectTimeout='.$this->connectTimeout;
     }
 
-    return new ExecFuture(
+    $key = $credential->getKeyfileEnvelope();
+    if ($this->isSSHProxied()) {
+      if ($this->remoteKeyFile === null) {
+        $temp_name = '/tmp/'.Filesystem::readRandomCharacters(20).'.proxy';
+        $key_future = new ExecFuture(
+          'cat %P | %C %s',
+          $key,
+          $this->getSSHProxyCommand(),
+          csprintf(
+            'touch %s && chmod 0600 %s && cat - >%s',
+            $temp_name,
+            $temp_name,
+            $temp_name));
+        $key_future->resolvex();
+        $this->remoteKeyFile = new RemoteTempFile(
+          $temp_name,
+          new ExecFuture(
+            '%C %s',
+            $this->getSSHProxyCommand(),
+            csprintf('rm %s', $temp_name)));
+      }
+      $key = new PhutilOpaqueEnvelope((string)$this->remoteKeyFile);
+    }
+
+    $escaped_command = csprintf(
       'ssh %Ls -l %P -p %s -i %P %s -- %s',
       $flags,
       $credential->getUsernameEnvelope(),
       $this->getConfig('port'),
-      $credential->getKeyfileEnvelope(),
+      $key,
       $this->getConfig('host'),
       $full_command);
+
+    $proxy_cmd = $this->getSSHProxyCommand();
+    if ($proxy_cmd !== '') {
+      $future = new ExecFuture(
+        '%C %s',
+        $proxy_cmd,
+        $escaped_command);
+    } else {
+      $future = new ExecFuture(
+        '%C',
+        $escaped_command);
+    }
+
+    $future->setTimeout($this->execTimeout);
+    return $future;
   }
 }

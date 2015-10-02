@@ -271,7 +271,9 @@ final class DrydockResourceUpdateWorker extends DrydockWorker {
       DrydockResourceActivationFailureLogType::LOGCONST,
       array(
         'class' => get_class($ex),
-        'message' => $ex->getMessage(),
+        'message' => $ex->getMessage().$ex->getTraceAsString(),
+        'stdout' => ($ex instanceof CommandException) ? $ex->getStdout() : null,
+        'stderr' => ($ex instanceof CommandException) ? $ex->getStderr() : null,
       ));
 
     throw new PhabricatorWorkerPermanentFailureException(

@@ -5,6 +5,11 @@ abstract class DrydockCommandInterface extends DrydockInterface {
   const INTERFACE_TYPE = 'command';
 
   private $workingDirectoryStack = array();
+  private $sshProxyHost;
+  private $sshProxyPort;
+  private $sshProxyCredential;
+  private $debugConnection;
+  private $escapingMode;
 
   public function pushWorkingDirectory($working_directory) {
     $this->workingDirectoryStack[] = $working_directory;
@@ -27,8 +32,56 @@ abstract class DrydockCommandInterface extends DrydockInterface {
     return null;
   }
 
+  public function setEscapingMode($escaping_mode) {
+    $this->escapingMode = $escaping_mode;
+    return $this;
+  }
+
+  public function getEscapingMode() {
+    return $this->escapingMode;
+  }
+
+  public function enableConnectionDebugging() {
+    $this->debugConnection = true;
+    return $this;
+  }
+
+  protected function getConnectionDebugging() {
+    return $this->debugConnection;
+  }
+
   final public function getInterfaceType() {
     return self::INTERFACE_TYPE;
+  }
+
+  public function setSSHProxy($host, $port, $credential) {
+    $this->sshProxyHost = $host;
+    $this->sshProxyPort = $port;
+    $this->sshProxyCredential = $credential;
+    return $this;
+  }
+
+  public function getSSHProxyCommand() {
+    if ($this->sshProxyHost === null) {
+      return '';
+    }
+
+    return csprintf(
+      'ssh '.
+      '-o LogLevel=%s '.
+      '-o StrictHostKeyChecking=no '.
+      '-o UserKnownHostsFile=/dev/null '.
+      '-o BatchMode=yes '.
+      '-p %s -i %P %P@%s --',
+      $this->getConnectionDebugging() ? 'debug' : 'quiet',
+      $this->sshProxyPort,
+      $this->sshProxyCredential->getKeyfileEnvelope(),
+      $this->sshProxyCredential->getUsernameEnvelope(),
+      $this->sshProxyHost);
+  }
+
+  public function isSSHProxied() {
+    return $this->sshProxyHost !== null;
   }
 
   final public function exec($command) {
